@@ -127,6 +127,10 @@ export default function App() {
     socket.emit('add_drawing', drawingData);
   };
 
+  const handleDeleteDrawing = (drawingId) => {
+    socket.emit('delete_drawing', drawingId);
+  };
+
   const handleUpdateSheet = (sheetData) => {
     socket.emit('update_sheet', sheetData);
   };
@@ -168,6 +172,7 @@ export default function App() {
             onMoveToken={handleMoveToken}
             onAddToken={handleAddToken}
             onAddDrawing={handleAddDrawing}
+            onDeleteDrawing={handleDeleteDrawing}
             activeDrawingTool={activeDrawingTool}
             drawingColor={drawingColor}
             drawingWidth={strokeWidth}

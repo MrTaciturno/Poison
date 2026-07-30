@@ -187,6 +187,16 @@ export function setupSocketHandler(io) {
       io.to(currentRoom).emit('drawings_updated', room.drawings);
     });
 
+    // Delete Single Drawing (Eraser)
+    socket.on('delete_drawing', (drawingId) => {
+      if (!currentRoom) return;
+      const room = rooms.get(currentRoom);
+      if (!room) return;
+
+      room.drawings = room.drawings.filter(d => d.id !== drawingId);
+      io.to(currentRoom).emit('drawings_updated', room.drawings);
+    });
+
     // Clear Drawings
     socket.on('clear_drawings', () => {
       if (!currentRoom) return;

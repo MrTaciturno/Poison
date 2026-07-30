@@ -1,6 +1,46 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
 
+// Geometry Helper for Eraser Collision Detection
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+  if (l2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+}
+
+function isPointNearDrawing(px, py, d, radius = 20) {
+  if (d.type === 'straight_line' || d.type === 'ruler') {
+    return distToSegment(px, py, d.startX, d.startY, d.endX, d.endY) <= radius;
+  }
+  if (d.type === 'freehand' && Array.isArray(d.points)) {
+    for (let i = 0; i < d.points.length - 1; i++) {
+      if (distToSegment(px, py, d.points[i].x, d.points[i].y, d.points[i + 1].x, d.points[i + 1].y) <= radius) {
+        return true;
+      }
+    }
+  }
+  if (d.type === 'rectangle') {
+    const nearTop = distToSegment(px, py, d.x, d.y, d.x + d.w, d.y) <= radius;
+    const nearBottom = distToSegment(px, py, d.x, d.y + d.h, d.x + d.w, d.y + d.h) <= radius;
+    const nearLeft = distToSegment(px, py, d.x, d.y, d.x, d.y + d.h) <= radius;
+    const nearRight = distToSegment(px, py, d.x + d.w, d.y, d.x + d.w, d.y + d.h) <= radius;
+    return nearTop || nearBottom || nearLeft || nearRight;
+  }
+  if (d.type === 'circle') {
+    const distFromCenter = Math.hypot(px - d.cx, py - d.cy);
+    return Math.abs(distFromCenter - d.radius) <= radius || distFromCenter <= radius;
+  }
+  if (d.type === 'cone') {
+    const nearLeft = distToSegment(px, py, d.originX, d.originY, d.leftX, d.leftY) <= radius;
+    const nearRight = distToSegment(px, py, d.originX, d.originY, d.rightX, d.rightY) <= radius;
+    const nearBase = distToSegment(px, py, d.leftX, d.leftY, d.rightX, d.rightY) <= radius;
+    return nearLeft || nearRight || nearBase;
+  }
+  return false;
+}
+
 export default function VTTCanvas({
   mapState,
   tokens = [],
@@ -10,6 +50,7 @@ export default function VTTCanvas({
   onMoveToken,
   onAddToken,
   onAddDrawing,
+  onDeleteDrawing,
   activeDrawingTool,
   drawingColor,
   drawingWidth,
@@ -37,12 +78,14 @@ export default function VTTCanvas({
   const drawingToolRef = useRef(activeDrawingTool);
   const drawingColorRef = useRef(drawingColor);
   const drawingWidthRef = useRef(drawingWidth);
+  const drawingsRef = useRef(drawings);
 
   useEffect(() => {
     drawingToolRef.current = activeDrawingTool;
     drawingColorRef.current = drawingColor;
     drawingWidthRef.current = drawingWidth;
-  }, [activeDrawingTool, drawingColor, drawingWidth]);
+    drawingsRef.current = drawings;
+  }, [activeDrawingTool, drawingColor, drawingWidth, drawings]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -71,7 +114,7 @@ export default function VTTCanvas({
     const bgContainer = new PIXI.Container();
     const trailContainer = new PIXI.Container();
     const gridContainer = new PIXI.Graphics();
-    const drawingsContainer = new PIXI.Graphics();
+    const drawingsContainer = new PIXI.Container(); // Container for shapes and text
     const tokensContainer = new PIXI.Container();
     const interactionLayer = new PIXI.Graphics();
 
@@ -95,11 +138,29 @@ export default function VTTCanvas({
     let panStart = { x: 0, y: 0 };
     const canvasElement = app.view;
 
+    const checkAndEraseAtPoint = (localPos) => {
+      if (!onDeleteDrawing || !drawingsRef.current) return;
+      const radius = 25;
+      drawingsRef.current.forEach((d) => {
+        if (isPointNearDrawing(localPos.x, localPos.y, d, radius)) {
+          onDeleteDrawing(d.id);
+        }
+      });
+    };
+
     const onPointerDown = (e) => {
       // Middle click (button 1) or Alt+Click for panning
       if (e.button === 1 || (e.button === 0 && e.altKey)) {
         isPanning = true;
         panStart = { x: e.clientX - viewport.position.x, y: e.clientY - viewport.position.y };
+        return;
+      }
+
+      // Eraser Tool Immediate Trigger
+      if (e.button === 0 && drawingToolRef.current === 'eraser') {
+        const localPos = viewport.toLocal({ x: e.clientX, y: e.clientY });
+        isDrawingRef.current = true;
+        checkAndEraseAtPoint(localPos);
         return;
       }
 
@@ -120,10 +181,25 @@ export default function VTTCanvas({
         return;
       }
 
-      // Live Rubber-Band Drawing Preview
+      // Eraser Dragging Preview & Erase
+      if (drawingToolRef.current === 'eraser') {
+        const localPos = viewport.toLocal({ x: e.clientX, y: e.clientY });
+        interactionLayer.clear();
+        interactionLayer.lineStyle(2, 0x8b322c, 0.8);
+        interactionLayer.drawCircle(localPos.x, localPos.y, 15);
+
+        if (isDrawingRef.current) {
+          checkAndEraseAtPoint(localPos);
+        }
+        return;
+      }
+
+      // Live Drawing Rubber-Band Preview
       if (isDrawingRef.current && drawingToolRef.current) {
         const localPos = viewport.toLocal({ x: e.clientX, y: e.clientY });
         const start = drawStartRef.current;
+        if (!start) return;
+
         const colorHex = parseInt((drawingColorRef.current || '#a65d47').replace('#', ''), 16);
         const strokeW = drawingWidthRef.current || 3;
         const squareSize = mapState.gridSquareSize || 60;
@@ -157,7 +233,7 @@ export default function VTTCanvas({
           const dy = localPos.y - start.y;
           const angle = Math.atan2(dy, dx);
           const len = Math.hypot(dx, dy);
-          const coneAngle = Math.PI / 4; // 45 degree cone spread
+          const coneAngle = Math.PI / 4;
 
           const leftX = start.x + len * Math.cos(angle - coneAngle / 2);
           const leftY = start.y + len * Math.sin(angle - coneAngle / 2);
@@ -194,29 +270,38 @@ export default function VTTCanvas({
         isPanning = false;
       }
 
+      if (drawingToolRef.current === 'eraser') {
+        isDrawingRef.current = false;
+        interactionLayer.clear();
+        return;
+      }
+
       // Finish Drawing & Emit Event to Server
       if (isDrawingRef.current && drawingToolRef.current) {
         isDrawingRef.current = false;
         interactionLayer.clear();
         const localPos = viewport.toLocal({ x: e.clientX, y: e.clientY });
         const start = drawStartRef.current;
+        if (!start) return;
+
         const color = drawingColorRef.current || '#a65d47';
         const width = drawingWidthRef.current || 3;
+        const distPx = Math.hypot(localPos.x - start.x, localPos.y - start.y);
 
-        if (drawingToolRef.current === 'freehand') {
+        if (drawingToolRef.current === 'freehand' && freehandPointsRef.current.length > 1) {
           onAddDrawing({ type: 'freehand', points: freehandPointsRef.current, color, width });
-        } else if (drawingToolRef.current === 'straight_line') {
+        } else if (drawingToolRef.current === 'straight_line' && distPx > 5) {
           onAddDrawing({ type: 'straight_line', startX: start.x, startY: start.y, endX: localPos.x, endY: localPos.y, color, width });
-        } else if (drawingToolRef.current === 'rectangle') {
+        } else if (drawingToolRef.current === 'rectangle' && distPx > 5) {
           const rx = Math.min(start.x, localPos.x);
           const ry = Math.min(start.y, localPos.y);
           const rw = Math.abs(localPos.x - start.x);
           const rh = Math.abs(localPos.y - start.y);
           onAddDrawing({ type: 'rectangle', x: rx, y: ry, w: rw, h: rh, color, width });
-        } else if (drawingToolRef.current === 'circle') {
+        } else if (drawingToolRef.current === 'circle' && distPx > 5) {
           const radius = Math.hypot(localPos.x - start.x, localPos.y - start.y);
           onAddDrawing({ type: 'circle', cx: start.x, cy: start.y, radius, color, width });
-        } else if (drawingToolRef.current === 'cone') {
+        } else if (drawingToolRef.current === 'cone' && distPx > 5) {
           const dx = localPos.x - start.x;
           const dy = localPos.y - start.y;
           const angle = Math.atan2(dy, dx);
@@ -229,7 +314,7 @@ export default function VTTCanvas({
           const rightY = start.y + len * Math.sin(angle + coneAngle / 2);
 
           onAddDrawing({ type: 'cone', originX: start.x, originY: start.y, leftX, leftY, rightX, rightY, color, width });
-        } else if (drawingToolRef.current === 'ruler') {
+        } else if (drawingToolRef.current === 'ruler' && distPx > 5) {
           onAddDrawing({ type: 'ruler', startX: start.x, startY: start.y, endX: localPos.x, endY: localPos.y, color, width });
         }
       }
@@ -297,7 +382,7 @@ export default function VTTCanvas({
     const bgContainer = viewport.children[0];
     const trailContainer = viewport.children[1];
     const gridGraphics = viewport.children[2];
-    const drawingsGraphics = viewport.children[3];
+    const drawingsContainer = viewport.children[3];
     const tokensContainer = viewport.children[4];
     const interactionLayer = viewport.children[5];
 
@@ -359,13 +444,16 @@ export default function VTTCanvas({
       });
     }
 
-    // 4. Drawings Layer
-    drawingsGraphics.clear();
+    // 4. Drawings Layer (Container clean reset)
+    drawingsContainer.removeChildren();
+    const drawingsGraphics = new PIXI.Graphics();
+    drawingsContainer.addChild(drawingsGraphics);
+
     drawings.forEach(d => {
       const color = parseInt((d.color || '#a65d47').replace('#', ''), 16);
       const strokeW = d.width || 3;
 
-      if (d.type === 'freehand' && d.points) {
+      if (d.type === 'freehand' && d.points && d.points.length > 0) {
         drawingsGraphics.lineStyle(strokeW, color, 0.9);
         drawingsGraphics.moveTo(d.points[0].x, d.points[0].y);
         d.points.forEach(pt => drawingsGraphics.lineTo(pt.x, pt.y));
@@ -388,7 +476,7 @@ export default function VTTCanvas({
         drawingsGraphics.lineTo(d.originX, d.originY);
         drawingsGraphics.endFill();
       } else if (d.type === 'ruler') {
-        drawingsGraphics.lineStyle(2, 0xc5a059, 1);
+        drawingsGraphics.lineStyle(3, 0xe2c077, 1);
         drawingsGraphics.moveTo(d.startX, d.startY);
         drawingsGraphics.lineTo(d.endX, d.endY);
 
@@ -401,8 +489,8 @@ export default function VTTCanvas({
           stroke: 0x000000,
           strokeThickness: 3
         });
-        text.position.set((d.startX + d.endX) / 2, (d.startY + d.endY) / 2 - 10);
-        drawingsGraphics.addChild(text);
+        text.position.set((d.startX + d.endX) / 2, (d.startY + d.endY) / 2 - 12);
+        drawingsContainer.addChild(text);
       }
     });
 

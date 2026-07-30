@@ -10,6 +10,7 @@ export default function DrawingMenu({
   onClearDrawings
 }) {
   const tools = [
+    { id: null, name: 'Nenhum (Navegar)' },
     { id: 'ruler', name: 'Régua' },
     { id: 'cone', name: 'Cone' },
     { id: 'freehand', name: 'Linha Livre' },
@@ -22,12 +23,15 @@ export default function DrawingMenu({
   return (
     <div className="panel-section">
       <div className="panel-section-title">Ferramentas de Desenho no Grid</div>
+      <p style={{ fontSize: '0.8rem', color: 'var(--parchment-muted)', marginBottom: '8px' }}>
+        Ao sair deste menu, a seleção volta automaticamente para "Nenhum" para permitir a movimentação normal.
+      </p>
       
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
         {tools.map((t) => (
           <button
-            key={t.id}
-            className={activeTool === t.id ? 'btn-primary' : ''}
+            key={t.id ?? 'none'}
+            className={(activeTool === t.id || (!activeTool && t.id === null)) ? 'btn-primary' : ''}
             onClick={() => onSelectTool(t.id)}
           >
             {t.name}

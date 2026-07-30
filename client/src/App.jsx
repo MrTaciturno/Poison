@@ -35,8 +35,8 @@ export default function App() {
   const [selectedTokenId, setSelectedTokenId] = useState(null);
   const [isSheetModalOpen, setIsSheetModalOpen] = useState(false);
 
-  // Active Drawing Tool State
-  const [activeDrawingTool, setActiveDrawingTool] = useState('ruler');
+  // Active Drawing Tool State (Default: null - no drawing tool active)
+  const [activeDrawingTool, setActiveDrawingTool] = useState(null);
   const [drawingColor, setDrawingColor] = useState('#a65d47');
   const [strokeWidth, setStrokeWidth] = useState(3);
 
@@ -143,6 +143,17 @@ export default function App() {
     socket.emit('roll_dice', rollData);
   };
 
+  const handleSelectTab = (tab) => {
+    if (tab === 'sheet' && currentUser.sheetData) {
+      setIsSheetModalOpen(true);
+    }
+    // If navigating away from drawing menu, reset active drawing tool to null
+    if (tab !== 'drawing') {
+      setActiveDrawingTool(null);
+    }
+    setActiveTab(tab);
+  };
+
   const selectedToken = tokens.find((t) => t.id === selectedTokenId) || null;
 
   return (
@@ -167,7 +178,10 @@ export default function App() {
             selectedTokenId={selectedTokenId}
             onSelectToken={(token) => {
               setSelectedTokenId(token.id);
-              if (currentUser.isMaster) setActiveTab('tokens');
+              if (currentUser.isMaster) {
+                setActiveDrawingTool(null);
+                setActiveTab('tokens');
+              }
             }}
             onMoveToken={handleMoveToken}
             onAddToken={handleAddToken}
@@ -187,19 +201,17 @@ export default function App() {
             players={players}
             currentUser={currentUser}
             activeTab={activeTab}
-            onSelectTab={(tab) => {
-              if (tab === 'sheet' && currentUser.sheetData) {
-                setIsSheetModalOpen(true);
-              }
-              setActiveTab(tab);
-            }}
+            onSelectTab={handleSelectTab}
             onLeaveRoom={handleLeaveRoom}
           />
 
           {/* Right Floating Sidebar Menu */}
           <SidebarPanel
             activeTab={activeTab}
-            onClose={() => setActiveTab(null)}
+            onClose={() => {
+              setActiveTab(null);
+              setActiveDrawingTool(null);
+            }}
             mapState={mapState}
             onUpdateMap={handleUpdateMap}
             currentUser={currentUser}

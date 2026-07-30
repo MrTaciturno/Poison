@@ -1,0 +1,17 @@
+{
+  "name": "cosmos-vtt",
+  "version": "1.0.0",
+  "description": "Cosmos VTT - Virtual Table Top for Poise RPG",
+  "main": "server/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "build": "cd client && npm install && npm run build"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}

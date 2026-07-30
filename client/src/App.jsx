@@ -5,6 +5,7 @@ import VTTCanvas from './components/VTT/VTTCanvas.jsx';
 import TopHeader from './components/VTT/TopHeader.jsx';
 import SidebarPanel from './components/VTT/SidebarPanel.jsx';
 import RollToast from './components/VTT/RollToast.jsx';
+import PoiseSheetViewer from './components/VTT/PoiseSheetViewer.jsx';
 import { socket } from './utils/socket.js';
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
   // UI Active Sidebar Tab & Selection
   const [activeTab, setActiveTab] = useState(null);
   const [selectedTokenId, setSelectedTokenId] = useState(null);
+  const [isSheetModalOpen, setIsSheetModalOpen] = useState(false);
 
   // Active Drawing Tool State
   const [activeDrawingTool, setActiveDrawingTool] = useState('ruler');
@@ -52,7 +54,6 @@ export default function App() {
 
     socket.on('players_updated', (updatedPlayers) => {
       setPlayers(updatedPlayers);
-      // Keep currentUser state in sync
       const me = updatedPlayers.find((p) => p.id === socket.id);
       if (me) setCurrentUser(me);
     });
@@ -122,6 +123,10 @@ export default function App() {
     if (selectedTokenId === tokenId) setSelectedTokenId(null);
   };
 
+  const handleAddDrawing = (drawingData) => {
+    socket.emit('add_drawing', drawingData);
+  };
+
   const handleUpdateSheet = (sheetData) => {
     socket.emit('update_sheet', sheetData);
   };
@@ -161,6 +166,8 @@ export default function App() {
               if (currentUser.isMaster) setActiveTab('tokens');
             }}
             onMoveToken={handleMoveToken}
+            onAddToken={handleAddToken}
+            onAddDrawing={handleAddDrawing}
             activeDrawingTool={activeDrawingTool}
             drawingColor={drawingColor}
             drawingWidth={strokeWidth}
@@ -175,7 +182,12 @@ export default function App() {
             players={players}
             currentUser={currentUser}
             activeTab={activeTab}
-            onSelectTab={(tab) => setActiveTab(tab)}
+            onSelectTab={(tab) => {
+              if (tab === 'sheet' && currentUser.sheetData) {
+                setIsSheetModalOpen(true);
+              }
+              setActiveTab(tab);
+            }}
             onLeaveRoom={handleLeaveRoom}
           />
 
@@ -187,6 +199,7 @@ export default function App() {
             onUpdateMap={handleUpdateMap}
             currentUser={currentUser}
             onUpdateSheet={handleUpdateSheet}
+            onOpenFullSheet={() => setIsSheetModalOpen(true)}
             tokens={tokens}
             selectedToken={selectedToken}
             players={players}
@@ -203,6 +216,15 @@ export default function App() {
             onRollDice={handleRollDice}
             rollHistory={rollHistory}
           />
+
+          {/* Full Interactive Poise Character Sheet Modal */}
+          {isSheetModalOpen && currentUser.sheetData && (
+            <PoiseSheetViewer
+              sheet={currentUser.sheetData}
+              onUpdateSheet={handleUpdateSheet}
+              onClose={() => setIsSheetModalOpen(false)}
+            />
+          )}
 
           {/* Discrete Dice Roll Toast Popup */}
           <RollToast socket={socket} />

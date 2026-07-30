@@ -1,10 +1,31 @@
 // Cosmos VTT Socket.io Handler
 const rooms = new Map();
 
+function getPublicRoomsList() {
+  const list = [];
+  rooms.forEach((room, id) => {
+    const master = room.players.find(p => p.isMaster);
+    list.push({
+      roomId: id,
+      name: room.mapState.name || 'Mesa sem Título',
+      playerCount: room.players.length,
+      masterName: master ? master.name : 'Desconhecido'
+    });
+  });
+  return list;
+}
+
 export function setupSocketHandler(io) {
   io.on('connection', (socket) => {
     let currentRoom = null;
     let currentUser = null;
+
+    // Send active rooms list upon request or connection
+    socket.emit('rooms_list_updated', getPublicRoomsList());
+
+    socket.on('get_rooms_list', () => {
+      socket.emit('rooms_list_updated', getPublicRoomsList());
+    });
 
     // Join or Create Room
     socket.on('join_room', ({ roomId, userName, createAsMaster }) => {
@@ -52,6 +73,9 @@ export function setupSocketHandler(io) {
 
       // Notify other players in room
       io.to(roomId).emit('players_updated', room.players);
+      
+      // Broadcast updated rooms list to all lobby clients
+      io.emit('rooms_list_updated', getPublicRoomsList());
     });
 
     // Master updates map settings
@@ -62,6 +86,7 @@ export function setupSocketHandler(io) {
 
       room.mapState = { ...room.mapState, ...newMapState };
       io.to(currentRoom).emit('map_updated', room.mapState);
+      io.emit('rooms_list_updated', getPublicRoomsList());
     });
 
     // Add new Token
@@ -70,7 +95,6 @@ export function setupSocketHandler(io) {
       const room = rooms.get(currentRoom);
       if (!room) return;
 
-      // Auto-generate name with filename_index
       const baseName = tokenData.baseName || 'Token';
       const existingCount = room.tokens.filter(t => t.baseName === baseName).length;
       const tokenName = `${baseName}_${existingCount + 1}`;
@@ -80,8 +104,8 @@ export function setupSocketHandler(io) {
         baseName,
         name: tokenName,
         imageUrl: tokenData.imageUrl,
-        x: tokenData.x ?? 0,
-        y: tokenData.y ?? 0,
+        x: tokenData.x ?? 2,
+        y: tokenData.y ?? 2,
         gridW: tokenData.gridW || 1,
         gridH: tokenData.gridH || 1,
         hp: tokenData.hp ?? 20,
@@ -100,7 +124,7 @@ export function setupSocketHandler(io) {
       io.to(currentRoom).emit('tokens_updated', room.tokens);
     });
 
-    // Move Token (with waypoints & snap)
+    // Move Token
     socket.on('move_token', ({ tokenId, newX, newY, waypoints }) => {
       if (!currentRoom) return;
       const room = rooms.get(currentRoom);
@@ -109,11 +133,9 @@ export function setupSocketHandler(io) {
       const token = room.tokens.find(t => t.id === tokenId);
       if (!token) return;
 
-      // Check permission: Mestre or assigned player
       const canControl = currentUser.isMaster || token.assignedPlayerId === currentUser.id;
       if (!canControl) return;
 
-      // Update position & store previous path trail
       token.prevPath = waypoints || [{ x: token.x, y: token.y }, { x: newX, y: newY }];
       token.x = newX;
       token.y = newY;
@@ -165,7 +187,7 @@ export function setupSocketHandler(io) {
       io.to(currentRoom).emit('drawings_updated', room.drawings);
     });
 
-    // Clear Drawings (Master or Clear All)
+    // Clear Drawings
     socket.on('clear_drawings', () => {
       if (!currentRoom) return;
       const room = rooms.get(currentRoom);
@@ -191,7 +213,6 @@ export function setupSocketHandler(io) {
       const room = rooms.get(currentRoom);
       if (!room) return;
 
-      // Extract dice sides e.g. "d20" -> 20, "d%" -> 100
       let sides = 20;
       if (diceType === 'd%') sides = 100;
       else {
@@ -208,7 +229,6 @@ export function setupSocketHandler(io) {
       }
       const finalResult = total + bonus;
 
-      // Check if user has an assigned token name
       const assignedToken = room.tokens.find(t => t.assignedPlayerId === currentUser.id);
       const displayName = assignedToken ? `${currentUser.name} (${assignedToken.name})` : currentUser.name;
 
@@ -227,7 +247,6 @@ export function setupSocketHandler(io) {
       room.rollHistory.unshift(rollObj);
       if (room.rollHistory.length > 50) room.rollHistory.pop();
 
-      // Emit to all players in the room for feed & discrete bottom toast popup
       io.to(currentRoom).emit('dice_rolled', rollObj);
       io.to(currentRoom).emit('roll_history_updated', room.rollHistory);
     });
@@ -240,12 +259,12 @@ export function setupSocketHandler(io) {
         if (room.players.length === 0) {
           rooms.delete(currentRoom);
         } else {
-          // If master left, assign new master to first player
           if (currentUser?.isMaster && room.players.length > 0) {
             room.players[0].isMaster = true;
           }
           io.to(currentRoom).emit('players_updated', room.players);
         }
+        io.emit('rooms_list_updated', getPublicRoomsList());
       }
     });
   });

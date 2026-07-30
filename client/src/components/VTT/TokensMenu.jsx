@@ -9,7 +9,6 @@ export default function TokensMenu({
   onDeleteToken
 }) {
   const [presetTokens, setPresetTokens] = useState([]);
-  const [customTokenImg, setCustomTokenImg] = useState(null);
 
   useEffect(() => {
     fetch('/api/tokens')
@@ -29,6 +28,16 @@ export default function TokensMenu({
       mp: 10,
       maxMp: 10
     });
+  };
+
+  const handleDragStart = (e, token) => {
+    const payload = JSON.stringify({
+      baseName: token.name,
+      imageUrl: token.url,
+      gridW: 1,
+      gridH: 1
+    });
+    e.dataTransfer.setData('text/plain', payload);
   };
 
   const handleCustomUpload = (e) => {
@@ -167,15 +176,22 @@ export default function TokensMenu({
         </div>
       ) : (
         <p style={{ fontSize: '0.85rem', color: 'var(--sand-pastel)', marginBottom: '12px' }}>
-          Selecione um token no mapa para editar suas propriedades.
+          Arraste um token para o mapa ou clique nele para colocar no grid. Clique num token no mapa para editar suas propriedades.
         </p>
       )}
 
-      {/* Preset Tokens from Tokens Folder */}
+      {/* Preset Tokens Grid */}
       <div className="panel-section-title">Tokens da Biblioteca</div>
       <div className="panel-grid-list" style={{ marginTop: '8px' }}>
         {presetTokens.map((t) => (
-          <div key={t.filename} className="asset-thumb-card" onClick={() => handleSpawnPreset(t)}>
+          <div
+            key={t.filename}
+            className="asset-thumb-card"
+            draggable="true"
+            onDragStart={(e) => handleDragStart(e, t)}
+            onClick={() => handleSpawnPreset(t)}
+            title="Arraste para o mapa ou clique para colocar"
+          >
             <img src={t.url} alt={t.name} className="asset-thumb-img" />
             <div className="asset-thumb-name">{t.name}</div>
           </div>

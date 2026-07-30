@@ -19,15 +19,26 @@ export default function ItemsMenu({ onAddToken }) {
     setDescription(`Equipamento ocupando ${item.gridW}x${item.gridH} quadrados no grid.`);
   };
 
-  const handleSpawnItemOnMap = () => {
-    if (!selectedItem) return;
+  const handleDragStart = (e, item) => {
+    const payload = JSON.stringify({
+      baseName: item.name,
+      imageUrl: item.url,
+      gridW: item.gridW,
+      gridH: item.gridH
+    });
+    e.dataTransfer.setData('text/plain', payload);
+  };
+
+  const handleSpawnItemOnMap = (itemToSpawn) => {
+    const item = itemToSpawn || selectedItem;
+    if (!item) return;
     onAddToken({
-      baseName: customName || selectedItem.name,
-      imageUrl: selectedItem.url,
+      baseName: customName || item.name,
+      imageUrl: item.url,
       x: 3,
       y: 3,
-      gridW: selectedItem.gridW,
-      gridH: selectedItem.gridH,
+      gridW: item.gridW,
+      gridH: item.gridH,
       hp: 10,
       maxHp: 10
     });
@@ -37,7 +48,7 @@ export default function ItemsMenu({ onAddToken }) {
     <div className="panel-section">
       <div className="panel-section-title">Equipamentos & Itens do Grid</div>
       <p style={{ fontSize: '0.8rem', color: 'var(--parchment-muted)', marginBottom: '8px' }}>
-        Os itens mantêm suas dimensões exatas no grid (1x1, 1x2, 2x2, etc.) conforme indicado pelo nome do arquivo.
+        Arraste um equipamento para o mapa ou clique para colocá-lo no grid. Eles mantêm suas dimensões exatas (1x1, 1x2, 2x2, etc.) sem esticar.
       </p>
 
       {/* Grid of Equipment Presets */}
@@ -46,10 +57,16 @@ export default function ItemsMenu({ onAddToken }) {
           <div
             key={eq.filename}
             className={`asset-thumb-card ${selectedItem?.filename === eq.filename ? 'selected' : ''}`}
-            onClick={() => handleSelectItem(eq)}
+            draggable="true"
+            onDragStart={(e) => handleDragStart(e, eq)}
+            onClick={() => {
+              handleSelectItem(eq);
+              handleSpawnItemOnMap(eq);
+            }}
             style={{
               borderColor: selectedItem?.filename === eq.filename ? 'var(--metal-gold)' : 'var(--metal-bronze)'
             }}
+            title="Arraste para o mapa ou clique para colocar"
           >
             <img src={eq.url} alt={eq.name} className="asset-thumb-img" />
             <div className="asset-thumb-name">{eq.name} ({eq.gridW}x{eq.gridH})</div>
@@ -86,7 +103,7 @@ export default function ItemsMenu({ onAddToken }) {
               />
             </div>
 
-            <button className="btn-primary" onClick={handleSpawnItemOnMap} style={{ marginTop: '8px' }}>
+            <button className="btn-primary" onClick={() => handleSpawnItemOnMap(selectedItem)} style={{ marginTop: '8px' }}>
               Colocar no Mapa
             </button>
           </div>

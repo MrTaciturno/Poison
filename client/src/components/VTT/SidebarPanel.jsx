@@ -14,6 +14,7 @@ export default function SidebarPanel({
   onUpdateMap,
   currentUser,
   onUpdateSheet,
+  onOpenFullSheet,
   tokens,
   selectedToken,
   players,
@@ -57,7 +58,7 @@ export default function SidebarPanel({
         )}
 
         {activeTab === 'sheet' && (
-          <SheetMenu currentUser={currentUser} onUpdateSheet={onUpdateSheet} />
+          <SheetMenu currentUser={currentUser} onUpdateSheet={onUpdateSheet} onOpenFullSheet={onOpenFullSheet} />
         )}
 
         {activeTab === 'tokens' && currentUser.isMaster && (

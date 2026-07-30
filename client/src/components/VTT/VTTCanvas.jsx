@@ -8,6 +8,7 @@ export default function VTTCanvas({
   selectedTokenId,
   onSelectToken,
   onMoveToken,
+  onAddToken,
   onAddDrawing,
   activeDrawingTool,
   drawingColor,
@@ -27,13 +28,25 @@ export default function VTTCanvas({
   const draggingTokenRef = useRef(null);
   const waypointsRef = useRef([]);
 
-  // Drawing in progress
-  const drawingInProgressRef = useRef(null);
+  // Active Drawing In-Progress State
+  const isDrawingRef = useRef(false);
+  const drawStartRef = useRef(null);
+  const freehandPointsRef = useRef([]);
+
+  // Keep drawing props in refs for pointer events
+  const drawingToolRef = useRef(activeDrawingTool);
+  const drawingColorRef = useRef(drawingColor);
+  const drawingWidthRef = useRef(drawingWidth);
+
+  useEffect(() => {
+    drawingToolRef.current = activeDrawingTool;
+    drawingColorRef.current = drawingColor;
+    drawingWidthRef.current = drawingWidth;
+  }, [activeDrawingTool, drawingColor, drawingWidth]);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Create Pixi.js Application
     const width = containerRef.current.clientWidth;
     const height = containerRef.current.clientHeight;
 
@@ -69,7 +82,6 @@ export default function VTTCanvas({
     viewport.addChild(tokensContainer);
     viewport.addChild(interactionLayer);
 
-    // Dynamic Window Resize Listener
     const handleResize = () => {
       if (!containerRef.current || !pixiAppRef.current) return;
       const newW = containerRef.current.clientWidth;
@@ -81,14 +93,22 @@ export default function VTTCanvas({
     // Pan & Zoom Event Listeners
     let isPanning = false;
     let panStart = { x: 0, y: 0 };
-
     const canvasElement = app.view;
 
     const onPointerDown = (e) => {
-      // Middle click (button 1) or background drag with space or non-token click
+      // Middle click (button 1) or Alt+Click for panning
       if (e.button === 1 || (e.button === 0 && e.altKey)) {
         isPanning = true;
         panStart = { x: e.clientX - viewport.position.x, y: e.clientY - viewport.position.y };
+        return;
+      }
+
+      // Drawing Tool Interaction
+      if (e.button === 0 && drawingToolRef.current && !draggingTokenRef.current) {
+        const localPos = viewport.toLocal({ x: e.clientX, y: e.clientY });
+        isDrawingRef.current = true;
+        drawStartRef.current = { x: localPos.x, y: localPos.y };
+        freehandPointsRef.current = [{ x: localPos.x, y: localPos.y }];
       }
     };
 
@@ -97,12 +117,121 @@ export default function VTTCanvas({
         viewport.position.x = e.clientX - panStart.x;
         viewport.position.y = e.clientY - panStart.y;
         setPanPos({ x: viewport.position.x, y: viewport.position.y });
+        return;
+      }
+
+      // Live Rubber-Band Drawing Preview
+      if (isDrawingRef.current && drawingToolRef.current) {
+        const localPos = viewport.toLocal({ x: e.clientX, y: e.clientY });
+        const start = drawStartRef.current;
+        const colorHex = parseInt((drawingColorRef.current || '#a65d47').replace('#', ''), 16);
+        const strokeW = drawingWidthRef.current || 3;
+        const squareSize = mapState.gridSquareSize || 60;
+
+        interactionLayer.clear();
+
+        if (drawingToolRef.current === 'freehand') {
+          freehandPointsRef.current.push({ x: localPos.x, y: localPos.y });
+          interactionLayer.lineStyle(strokeW, colorHex, 0.9);
+          interactionLayer.moveTo(freehandPointsRef.current[0].x, freehandPointsRef.current[0].y);
+          freehandPointsRef.current.forEach(pt => interactionLayer.lineTo(pt.x, pt.y));
+        } else if (drawingToolRef.current === 'straight_line') {
+          interactionLayer.lineStyle(strokeW, colorHex, 0.9);
+          interactionLayer.moveTo(start.x, start.y);
+          interactionLayer.lineTo(localPos.x, localPos.y);
+        } else if (drawingToolRef.current === 'rectangle') {
+          interactionLayer.lineStyle(strokeW, colorHex, 0.9);
+          const rx = Math.min(start.x, localPos.x);
+          const ry = Math.min(start.y, localPos.y);
+          const rw = Math.abs(localPos.x - start.x);
+          const rh = Math.abs(localPos.y - start.y);
+          interactionLayer.drawRect(rx, ry, rw, rh);
+        } else if (drawingToolRef.current === 'circle') {
+          interactionLayer.lineStyle(strokeW, colorHex, 0.9);
+          const radius = Math.hypot(localPos.x - start.x, localPos.y - start.y);
+          interactionLayer.drawCircle(start.x, start.y, radius);
+        } else if (drawingToolRef.current === 'cone') {
+          interactionLayer.lineStyle(strokeW, colorHex, 0.9);
+          interactionLayer.beginFill(colorHex, 0.25);
+          const dx = localPos.x - start.x;
+          const dy = localPos.y - start.y;
+          const angle = Math.atan2(dy, dx);
+          const len = Math.hypot(dx, dy);
+          const coneAngle = Math.PI / 4; // 45 degree cone spread
+
+          const leftX = start.x + len * Math.cos(angle - coneAngle / 2);
+          const leftY = start.y + len * Math.sin(angle - coneAngle / 2);
+          const rightX = start.x + len * Math.cos(angle + coneAngle / 2);
+          const rightY = start.y + len * Math.sin(angle + coneAngle / 2);
+
+          interactionLayer.moveTo(start.x, start.y);
+          interactionLayer.lineTo(leftX, leftY);
+          interactionLayer.lineTo(rightX, rightY);
+          interactionLayer.lineTo(start.x, start.y);
+          interactionLayer.endFill();
+        } else if (drawingToolRef.current === 'ruler') {
+          interactionLayer.lineStyle(3, 0xe2c077, 1);
+          interactionLayer.moveTo(start.x, start.y);
+          interactionLayer.lineTo(localPos.x, localPos.y);
+
+          const distPx = Math.hypot(localPos.x - start.x, localPos.y - start.y);
+          const distSquares = (distPx / squareSize).toFixed(1);
+          const text = new PIXI.Text(`${distSquares} q. (${(distSquares * 1.5).toFixed(1)}m)`, {
+            fontFamily: 'Cinzel',
+            fontSize: 14,
+            fill: 0xe2c077,
+            stroke: 0x000000,
+            strokeThickness: 3
+          });
+          text.position.set((start.x + localPos.x) / 2, (start.y + localPos.y) / 2 - 12);
+          interactionLayer.addChild(text);
+        }
       }
     };
 
     const onPointerUp = (e) => {
       if (e.button === 1 || e.button === 0) {
         isPanning = false;
+      }
+
+      // Finish Drawing & Emit Event to Server
+      if (isDrawingRef.current && drawingToolRef.current) {
+        isDrawingRef.current = false;
+        interactionLayer.clear();
+        const localPos = viewport.toLocal({ x: e.clientX, y: e.clientY });
+        const start = drawStartRef.current;
+        const color = drawingColorRef.current || '#a65d47';
+        const width = drawingWidthRef.current || 3;
+
+        if (drawingToolRef.current === 'freehand') {
+          onAddDrawing({ type: 'freehand', points: freehandPointsRef.current, color, width });
+        } else if (drawingToolRef.current === 'straight_line') {
+          onAddDrawing({ type: 'straight_line', startX: start.x, startY: start.y, endX: localPos.x, endY: localPos.y, color, width });
+        } else if (drawingToolRef.current === 'rectangle') {
+          const rx = Math.min(start.x, localPos.x);
+          const ry = Math.min(start.y, localPos.y);
+          const rw = Math.abs(localPos.x - start.x);
+          const rh = Math.abs(localPos.y - start.y);
+          onAddDrawing({ type: 'rectangle', x: rx, y: ry, w: rw, h: rh, color, width });
+        } else if (drawingToolRef.current === 'circle') {
+          const radius = Math.hypot(localPos.x - start.x, localPos.y - start.y);
+          onAddDrawing({ type: 'circle', cx: start.x, cy: start.y, radius, color, width });
+        } else if (drawingToolRef.current === 'cone') {
+          const dx = localPos.x - start.x;
+          const dy = localPos.y - start.y;
+          const angle = Math.atan2(dy, dx);
+          const len = Math.hypot(dx, dy);
+          const coneAngle = Math.PI / 4;
+
+          const leftX = start.x + len * Math.cos(angle - coneAngle / 2);
+          const leftY = start.y + len * Math.sin(angle - coneAngle / 2);
+          const rightX = start.x + len * Math.cos(angle + coneAngle / 2);
+          const rightY = start.y + len * Math.sin(angle + coneAngle / 2);
+
+          onAddDrawing({ type: 'cone', originX: start.x, originY: start.y, leftX, leftY, rightX, rightY, color, width });
+        } else if (drawingToolRef.current === 'ruler') {
+          onAddDrawing({ type: 'ruler', startX: start.x, startY: start.y, endX: localPos.x, endY: localPos.y, color, width });
+        }
       }
     };
 
@@ -111,7 +240,6 @@ export default function VTTCanvas({
       const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
       const newScale = Math.min(Math.max(viewport.scale.x * zoomFactor, 0.2), 4.0);
 
-      // Zoom centered on cursor
       const rect = canvasElement.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
@@ -209,7 +337,7 @@ export default function VTTCanvas({
       gridGraphics.lineTo(totalW, r * squareSize);
     }
 
-    // 3. Movement Trails (Faint dashed lines from last move)
+    // 3. Movement Trails
     trailContainer.removeChildren();
     if (mapState.showTrail !== false) {
       tokens.forEach(token => {
@@ -264,7 +392,6 @@ export default function VTTCanvas({
         drawingsGraphics.moveTo(d.startX, d.startY);
         drawingsGraphics.lineTo(d.endX, d.endY);
 
-        // Distance text
         const distPx = Math.hypot(d.endX - d.startX, d.endY - d.startY);
         const distSquares = (distPx / squareSize).toFixed(1);
         const text = new PIXI.Text(`${distSquares} q. (${(distSquares * 1.5).toFixed(1)}m)`, {
@@ -290,7 +417,7 @@ export default function VTTCanvas({
       const tokenW = (t.gridW || 1) * squareSize;
       const tokenH = (t.gridH || 1) * squareSize;
 
-      // Aura (Radius in squares)
+      // Aura
       if (t.auraRadius > 0 && t.auraColor && t.auraColor !== 'transparent') {
         const auraGraphic = new PIXI.Graphics();
         const auraColorHex = parseInt(t.auraColor.replace('#', ''), 16);
@@ -301,7 +428,7 @@ export default function VTTCanvas({
         tokenGroup.addChild(auraGraphic);
       }
 
-      // Token Border & Background
+      // Border & Background
       const borderGraphic = new PIXI.Graphics();
       const borderColorHex = parseInt((t.borderColor || '#a67c52').replace('#', ''), 16);
       const isSelected = t.id === selectedTokenId;
@@ -322,7 +449,7 @@ export default function VTTCanvas({
         tokenGroup.addChild(sprite);
       }
 
-      // Token Name Label
+      // Name Label
       const nameText = new PIXI.Text(t.name, {
         fontFamily: 'Inter',
         fontSize: 11,
@@ -334,7 +461,7 @@ export default function VTTCanvas({
       nameText.position.set(tokenW / 2 - nameText.width / 2, tokenH + 2);
       tokenGroup.addChild(nameText);
 
-      // HP Bar over Token
+      // HP Bar
       if (t.maxHp > 0) {
         const hpBar = new PIXI.Graphics();
         const hpRatio = Math.max(0, Math.min(1, t.hp / t.maxHp));
@@ -348,12 +475,12 @@ export default function VTTCanvas({
         tokenGroup.addChild(hpBar);
       }
 
-      // Click & Drag Events for Token
+      // Click & Drag Token Events
       let isDragging = false;
       let startGridPos = { x: t.x, y: t.y };
 
       tokenGroup.on('pointerdown', (e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || drawingToolRef.current) return;
         e.stopPropagation();
         onSelectToken(t);
 
@@ -363,14 +490,12 @@ export default function VTTCanvas({
         startGridPos = { x: t.x, y: t.y };
       });
 
-      // Pointer movement while dragging token
       const onGlobalPointerMove = (e) => {
         if (!isDragging) return;
         const localPos = viewport.toLocal(e.global);
         const currentGridX = Math.floor(localPos.x / squareSize);
         const currentGridY = Math.floor(localPos.y / squareSize);
 
-        // Render Vector Arrow and Waypoints preview on Interaction Layer
         interactionLayer.clear();
         interactionLayer.lineStyle(3, 0xe2c077, 0.9);
 
@@ -384,11 +509,9 @@ export default function VTTCanvas({
           currentPt = wpPx;
         });
 
-        // Arrow to current mouse grid position
         const targetPx = { x: currentGridX * squareSize + squareSize / 2, y: currentGridY * squareSize + squareSize / 2 };
         interactionLayer.lineTo(targetPx.x, targetPx.y);
 
-        // Arrow head
         const angle = Math.atan2(targetPx.y - currentPt.y, targetPx.x - currentPt.x);
         interactionLayer.beginFill(0xe2c077, 1);
         interactionLayer.drawPolygon([
@@ -412,7 +535,6 @@ export default function VTTCanvas({
         const fullPath = [...waypointsRef.current, { x: finalGridX, y: finalGridY }];
         waypointsRef.current = [];
 
-        // Snap to grid on release
         onMoveToken(t.id, finalGridX, finalGridY, fullPath);
       };
 
@@ -425,7 +547,50 @@ export default function VTTCanvas({
 
   }, [mapState, tokens, drawings, selectedTokenId]);
 
+  // HTML5 Drag & Drop from Sidebar to Canvas
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const dataStr = e.dataTransfer.getData('text/plain');
+    if (!dataStr || !viewportRef.current) return;
+
+    try {
+      const payload = JSON.parse(dataStr);
+      const squareSize = mapState.gridSquareSize || 60;
+      const rect = containerRef.current.getBoundingClientRect();
+      const dropMousePos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const localPos = viewportRef.current.toLocal(dropMousePos);
+
+      const gridX = Math.max(0, Math.floor(localPos.x / squareSize));
+      const gridY = Math.max(0, Math.floor(localPos.y / squareSize));
+
+      onAddToken({
+        baseName: payload.baseName || 'Token',
+        imageUrl: payload.imageUrl,
+        gridW: payload.gridW || 1,
+        gridH: payload.gridH || 1,
+        x: gridX,
+        y: gridY,
+        hp: 20,
+        maxHp: 20,
+        mp: 10,
+        maxMp: 10
+      });
+    } catch (err) {
+      console.error('Erro ao soltar item no mapa:', err);
+    }
+  };
+
   return (
-    <div className="vtt-canvas-wrapper" ref={containerRef} />
+    <div
+      className="vtt-canvas-wrapper"
+      ref={containerRef}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    />
   );
 }

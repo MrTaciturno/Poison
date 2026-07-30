@@ -18,7 +18,7 @@ const io = new Server(server, {
     origin: '*',
     methods: ['GET', 'POST']
   },
-  maxHttpBufferSize: 1e7 // 10MB limit for uploading custom images/tokens
+  maxHttpBufferSize: 1e7 // 10MB limit
 });
 
 app.use(cors());
@@ -28,11 +28,9 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/Tokens', express.static(path.join(rootDir, 'Tokens')));
 app.use('/Equip', express.static(path.join(rootDir, 'Equip')));
 
-// Serve client dist in production
+// Serve client dist static assets
 const clientDistPath = path.join(rootDir, 'client', 'dist');
-if (fs.existsSync(clientDistPath)) {
-  app.use(express.static(clientDistPath));
-}
+app.use(express.static(clientDistPath));
 
 // API to list preset tokens in Tokens folder
 app.get('/api/tokens', (req, res) => {
@@ -69,7 +67,6 @@ app.get('/api/equip', (req, res) => {
       .filter(file => /\.(png|jpe?g|svg|webp)$/i.test(file))
       .map(file => {
         const basename = file.replace(/\.[^/.]+$/, '');
-        // Extract grid dimensions from filename e.g. IC1x2 -> width 1, height 2
         let gridW = 1;
         let gridH = 1;
         const match = basename.match(/(\d+)x(\d+)/i);
@@ -91,8 +88,9 @@ app.get('/api/equip', (req, res) => {
 
 // Fallback to index.html for SPA routing
 app.get('*', (req, res) => {
-  if (fs.existsSync(path.join(clientDistPath, 'index.html'))) {
-    res.sendFile(path.join(clientDistPath, 'index.html'));
+  const indexPath = path.join(clientDistPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
   } else {
     res.send('Cosmos VTT Server running. Build client to access full application UI.');
   }

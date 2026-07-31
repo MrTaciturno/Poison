@@ -23,7 +23,6 @@ export default function SheetMenu({ currentUser, onUpdateSheet, onOpenFullSheet,
         setSheet(loadedData);
         onUpdateSheet(loadedData);
         setErrorMsg('');
-        if (onOpenFullSheet) onOpenFullSheet();
       } else {
         setErrorMsg(result.error);
       }
@@ -147,7 +146,7 @@ export default function SheetMenu({ currentUser, onUpdateSheet, onOpenFullSheet,
 
         <div className="sheet-equipment-grid" style={{ minHeight: '120px' }}>
           {inventoryList.length === 0 ? (
-            <div style={{ gridColumn: '1 / -1', textWrap: 'pretty', textAlign: 'center', color: 'var(--parchment-dark)', fontSize: '0.8rem', padding: '16px 0' }}>
+            <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--parchment-dark)', fontSize: '0.8rem', padding: '16px 0' }}>
               Nenhum item no inventário. Arraste itens para guardar aqui.
             </div>
           ) : (

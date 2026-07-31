@@ -114,7 +114,7 @@ export default function VTTCanvas({
     const bgContainer = new PIXI.Container();
     const trailContainer = new PIXI.Container();
     const gridContainer = new PIXI.Graphics();
-    const drawingsContainer = new PIXI.Container(); // Container for shapes and text
+    const drawingsContainer = new PIXI.Container();
     const tokensContainer = new PIXI.Container();
     const interactionLayer = new PIXI.Graphics();
 
@@ -246,6 +246,7 @@ export default function VTTCanvas({
           interactionLayer.lineTo(start.x, start.y);
           interactionLayer.endFill();
         } else if (drawingToolRef.current === 'ruler') {
+          // Temporary Tactical Ruler Guide (Live measurement preview)
           interactionLayer.lineStyle(3, 0xe2c077, 1);
           interactionLayer.moveTo(start.x, start.y);
           interactionLayer.lineTo(localPos.x, localPos.y);
@@ -255,11 +256,12 @@ export default function VTTCanvas({
           const text = new PIXI.Text(`${distSquares} q. (${(distSquares * 1.5).toFixed(1)}m)`, {
             fontFamily: 'Cinzel',
             fontSize: 14,
+            fontWeight: 'bold',
             fill: 0xe2c077,
             stroke: 0x000000,
-            strokeThickness: 3
+            strokeThickness: 4
           });
-          text.position.set((start.x + localPos.x) / 2, (start.y + localPos.y) / 2 - 12);
+          text.position.set((start.x + localPos.x) / 2, (start.y + localPos.y) / 2 - 14);
           interactionLayer.addChild(text);
         }
       }
@@ -276,7 +278,14 @@ export default function VTTCanvas({
         return;
       }
 
-      // Finish Drawing & Emit Event to Server
+      // Temporary Ruler Tool clears on release without leaving permanent lines
+      if (drawingToolRef.current === 'ruler') {
+        isDrawingRef.current = false;
+        interactionLayer.clear();
+        return;
+      }
+
+      // Finish Drawing & Emit Event to Server for persistent shapes
       if (isDrawingRef.current && drawingToolRef.current) {
         isDrawingRef.current = false;
         interactionLayer.clear();
@@ -314,8 +323,6 @@ export default function VTTCanvas({
           const rightY = start.y + len * Math.sin(angle + coneAngle / 2);
 
           onAddDrawing({ type: 'cone', originX: start.x, originY: start.y, leftX, leftY, rightX, rightY, color, width });
-        } else if (drawingToolRef.current === 'ruler' && distPx > 5) {
-          onAddDrawing({ type: 'ruler', startX: start.x, startY: start.y, endX: localPos.x, endY: localPos.y, color, width });
         }
       }
     };
@@ -444,7 +451,7 @@ export default function VTTCanvas({
       });
     }
 
-    // 4. Drawings Layer (Container clean reset)
+    // 4. Drawings Layer
     drawingsContainer.removeChildren();
     const drawingsGraphics = new PIXI.Graphics();
     drawingsContainer.addChild(drawingsGraphics);
@@ -475,22 +482,6 @@ export default function VTTCanvas({
         drawingsGraphics.lineTo(d.rightX, d.rightY);
         drawingsGraphics.lineTo(d.originX, d.originY);
         drawingsGraphics.endFill();
-      } else if (d.type === 'ruler') {
-        drawingsGraphics.lineStyle(3, 0xe2c077, 1);
-        drawingsGraphics.moveTo(d.startX, d.startY);
-        drawingsGraphics.lineTo(d.endX, d.endY);
-
-        const distPx = Math.hypot(d.endX - d.startX, d.endY - d.startY);
-        const distSquares = (distPx / squareSize).toFixed(1);
-        const text = new PIXI.Text(`${distSquares} q. (${(distSquares * 1.5).toFixed(1)}m)`, {
-          fontFamily: 'Cinzel',
-          fontSize: 14,
-          fill: 0xe2c077,
-          stroke: 0x000000,
-          strokeThickness: 3
-        });
-        text.position.set((d.startX + d.endX) / 2, (d.startY + d.endY) / 2 - 12);
-        drawingsContainer.addChild(text);
       }
     });
 
@@ -590,7 +581,15 @@ export default function VTTCanvas({
         let currentPt = { x: startGridPos.x * squareSize + squareSize / 2, y: startGridPos.y * squareSize + squareSize / 2 };
         interactionLayer.moveTo(currentPt.x, currentPt.y);
 
+        let totalSquares = 0;
+        let prevGridPos = { x: startGridPos.x, y: startGridPos.y };
+
         waypointsRef.current.forEach(wp => {
+          const dx = wp.x - prevGridPos.x;
+          const dy = wp.y - prevGridPos.y;
+          totalSquares += Math.hypot(dx, dy);
+          prevGridPos = { x: wp.x, y: wp.y };
+
           const wpPx = { x: wp.x * squareSize + squareSize / 2, y: wp.y * squareSize + squareSize / 2 };
           interactionLayer.lineTo(wpPx.x, wpPx.y);
           interactionLayer.drawCircle(wpPx.x, wpPx.y, 4);
@@ -600,6 +599,10 @@ export default function VTTCanvas({
         const targetPx = { x: currentGridX * squareSize + squareSize / 2, y: currentGridY * squareSize + squareSize / 2 };
         interactionLayer.lineTo(targetPx.x, targetPx.y);
 
+        const lastDx = currentGridX - prevGridPos.x;
+        const lastDy = currentGridY - prevGridPos.y;
+        totalSquares += Math.hypot(lastDx, lastDy);
+
         const angle = Math.atan2(targetPx.y - currentPt.y, targetPx.x - currentPt.x);
         interactionLayer.beginFill(0xe2c077, 1);
         interactionLayer.drawPolygon([
@@ -608,6 +611,18 @@ export default function VTTCanvas({
           targetPx.x - 12 * Math.cos(angle + Math.PI / 6), targetPx.y - 12 * Math.sin(angle + Math.PI / 6)
         ]);
         interactionLayer.endFill();
+
+        // Live Movement Distance Badge Text Label
+        const distText = new PIXI.Text(`${totalSquares.toFixed(1)} q. (${(totalSquares * 1.5).toFixed(1)}m)`, {
+          fontFamily: 'Cinzel',
+          fontSize: 14,
+          fontWeight: 'bold',
+          fill: 0xe2c077,
+          stroke: 0x000000,
+          strokeThickness: 4
+        });
+        distText.position.set(targetPx.x + 14, targetPx.y - 14);
+        interactionLayer.addChild(distText);
       };
 
       const onGlobalPointerUp = (e) => {

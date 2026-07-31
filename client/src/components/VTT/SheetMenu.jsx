@@ -5,7 +5,8 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
   const [sheet, setSheet] = useState(currentUser?.sheetData || null);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const stagingInventory = currentUser?.stagingInventory || [];
+  // 3-item limit staging inventory
+  const stagingInventory = (currentUser?.stagingInventory || []).slice(0, 3);
 
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
@@ -36,8 +37,13 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
     onUpdateSheet(null);
   };
 
-  // Add Item to 3x4 Staging Grid from Map or Drag
+  // Add Item to 3-item Staging Grid from Map or Drag
   const handleAddItemToStaging = (itemObj) => {
+    if (stagingInventory.length >= 3) {
+      alert('O grid temporário aceita no máximo 3 itens simultâneos.');
+      return;
+    }
+
     const newItem = {
       id: `equip_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       name: itemObj.baseName || itemObj.name || 'Equipamento',
@@ -47,7 +53,7 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
       imageUrl: itemObj.imageUrl || `/Equip/${itemObj.name}.png`
     };
 
-    const updatedStaging = [...stagingInventory, newItem];
+    const updatedStaging = [...stagingInventory, newItem].slice(0, 3);
     if (socket) {
       socket.emit('update_staging_inventory', updatedStaging);
     }
@@ -58,7 +64,7 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
     }
   };
 
-  // Spawn item from 3x4 Staging Grid onto VTT Map
+  // Spawn item from 3-item Staging Grid onto VTT Map
   const handlePlaceItemOnMap = (item, index) => {
     if (onAddToken) {
       onAddToken({
@@ -71,7 +77,7 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
       });
     }
 
-    // Remove from 3x4 staging inventory
+    // Remove from staging inventory
     const updatedStaging = [...stagingInventory];
     updatedStaging.splice(index, 1);
     if (socket) {
@@ -79,7 +85,7 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
     }
   };
 
-  // HTML5 Drop on 3x4 Staging Grid
+  // HTML5 Drop on Staging Grid
   const handleStagingDrop = (e) => {
     e.preventDefault();
     const dataStr = e.dataTransfer.getData('text/plain');
@@ -93,48 +99,77 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
     }
   };
 
-  // Generate 12 fixed slots (3 columns x 4 rows)
-  const gridSlots = Array.from({ length: 12 }, (_, i) => stagingInventory[i] || null);
+  // Generate 3 fixed slots
+  const gridSlots = Array.from({ length: 3 }, (_, i) => stagingInventory[i] || null);
 
   return (
     <div className="sheet-container">
-      {/* 1. Sheet Upload or Actions Section */}
-      {!sheet ? (
-        <div className="panel-section">
-          <div className="panel-section-title">Upload de Planilha .poise</div>
-          <p style={{ fontSize: '0.82rem', color: 'var(--parchment-muted)' }}>
-            Selecione seu arquivo de personagem no formato <code>.poise</code> para carregar todas as suas estatísticas.
-          </p>
-          <input type="file" accept=".poise,.json" onChange={handleFileUpload} style={{ marginTop: '8px' }} />
-          {errorMsg && <p style={{ color: 'var(--accent-red)', fontSize: '0.85rem', marginTop: '8px' }}>{errorMsg}</p>}
-        </div>
-      ) : (
-        <div className="panel-section">
-          <div className="panel-section-title">Planilha: {sheet.name || 'Personagem'}</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-            <button className="btn-primary" onClick={onOpenFullSheet}>
-              Abrir Planilha Completa (Janela)
-            </button>
+      {/* Top Section: Open Editor Option & File Actions */}
+      <div className="panel-section">
+        <div className="panel-section-title">Editor da Planilha Poise</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+          <button className="btn-primary" onClick={onOpenFullSheet} style={{ padding: '10px', fontSize: '0.95rem' }}>
+            Abrir Editor
+          </button>
+
+          {!sheet ? (
+            <div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--parchment-muted)', margin: '6px 0 4px 0' }}>
+                Carregar arquivo de personagem (.poise):
+              </p>
+
+              {/* Botão Bonito Personalizado */}
+              <label 
+                htmlFor="file-poise-upload-input" 
+                className="btn-secondary"
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '6px',
+                  padding: '8px 12px', 
+                  fontSize: '0.85rem', 
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  width: '100%',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <span>📂</span> Selecionar Arquivo .poise
+              </label>
+
+              {/* Input Nativo Oculto */}
+              <input 
+                id="file-poise-upload-input"
+                type="file" 
+                accept=".poise,.json" 
+                onChange={handleFileUpload} 
+                style={{ display: 'none' }} 
+              />
+
+              {errorMsg && <p style={{ color: 'var(--accent-red)', fontSize: '0.8rem', marginTop: '4px' }}>{errorMsg}</p>}
+            </div>
+          ) : (
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={handleSaveSheet} style={{ flex: 1 }}>Salvar .poise</button>
-              <button className="btn-danger" onClick={handleClearSheet} style={{ flex: 1 }}>Trocar Arquivo</button>
+              <button className="btn-danger" onClick={handleClearSheet} style={{ flex: 1 }}>Trocar Ficha</button>
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* 2. ALWAYS VISIBLE 3x4 Temporary Equipment Grid (12 Slots) */}
+      {/* ALWAYS VISIBLE 3-ITEM TEMPORARY EQUIPMENT GRID */}
       <div
         className="panel-section"
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleStagingDrop}
       >
-        <div className="panel-section-title">Grid Temporário de Equipamentos (3x4)</div>
+        <div className="panel-section-title">Grid Temporário de Equipamentos (3 Itens)</div>
         <p style={{ fontSize: '0.78rem', color: 'var(--parchment-muted)', marginBottom: '8px' }}>
-          Este grid serve para manipular itens entre o mapa VTT e a planilha. Clicar no item coloca-o no mapa. Arraste para a planilha aberta.
+          Este espaço guarda até 3 itens para transferir entre o VTT e a planilha. Clicar no item coloca-o no mapa.
         </p>
 
-        {/* 3 columns x 4 rows visual grid */}
+        {/* 3 Slots Grid */}
         <div
           style={{
             display: 'grid',
@@ -158,7 +193,7 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
               onClick={() => item && handlePlaceItemOnMap(item, idx)}
               style={{
                 width: '100%',
-                height: '75px',
+                height: '85px',
                 backgroundColor: item ? '#2a1f18' : '#120d09',
                 border: item ? '1.5px solid var(--metal-gold)' : '1px dashed var(--metal-bronze)',
                 borderRadius: '4px',
@@ -171,23 +206,23 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
                 position: 'relative',
                 overflow: 'hidden'
               }}
-              title={item ? `${item.name} (${item.gridW}x${item.gridH}) - Clique para mapa / Arraste para planilha` : `Slot ${idx + 1}`}
+              title={item ? `${item.name} (${item.gridW}x${item.gridH}) - Clique para mapa / Arraste para o editor` : `Slot ${idx + 1}`}
             >
               {item ? (
                 <>
                   <img
                     src={item.imageUrl}
                     alt={item.name}
-                    style={{ maxHeight: '48px', maxWidth: '100%', objectFit: 'contain' }}
+                    style={{ maxHeight: '52px', maxWidth: '100%', objectFit: 'contain' }}
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                   <div
                     style={{
-                      fontSize: '0.65rem',
+                      fontSize: '0.68rem',
                       fontWeight: 'bold',
                       color: 'var(--metal-gold-bright)',
                       textAlign: 'center',
-                      lineHeight: '1',
+                      lineHeight: '1.1',
                       marginTop: '2px',
                       whiteSpace: 'nowrap',
                       textOverflow: 'ellipsis',
@@ -199,7 +234,7 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
                   </div>
                 </>
               ) : (
-                <span style={{ fontSize: '0.65rem', color: '#5a4636' }}>{idx + 1}</span>
+                <span style={{ fontSize: '0.7rem', color: '#5a4636' }}>Slot {idx + 1}</span>
               )}
             </div>
           ))}

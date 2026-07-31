@@ -13,6 +13,7 @@ export default function SidebarPanel({
   mapState,
   onUpdateMap,
   currentUser,
+  socket,
   onUpdateSheet,
   onOpenFullSheet,
   tokens,
@@ -60,6 +61,7 @@ export default function SidebarPanel({
         {activeTab === 'sheet' && (
           <SheetMenu
             currentUser={currentUser}
+            socket={socket}
             onUpdateSheet={onUpdateSheet}
             onOpenFullSheet={onOpenFullSheet}
             onAddToken={onAddToken}

@@ -49,6 +49,7 @@ export default function VTTCanvas({
   onSelectToken,
   onMoveToken,
   onAddToken,
+  onDeleteToken,
   onAddDrawing,
   onDeleteDrawing,
   activeDrawingTool,
@@ -74,18 +75,22 @@ export default function VTTCanvas({
   const drawStartRef = useRef(null);
   const freehandPointsRef = useRef([]);
 
-  // Keep drawing props in refs for pointer events
+  // Keep props in refs for event listeners
   const drawingToolRef = useRef(activeDrawingTool);
   const drawingColorRef = useRef(drawingColor);
   const drawingWidthRef = useRef(drawingWidth);
   const drawingsRef = useRef(drawings);
+  const selectedTokenIdRef = useRef(selectedTokenId);
+  const onDeleteTokenRef = useRef(onDeleteToken);
 
   useEffect(() => {
     drawingToolRef.current = activeDrawingTool;
     drawingColorRef.current = drawingColor;
     drawingWidthRef.current = drawingWidth;
     drawingsRef.current = drawings;
-  }, [activeDrawingTool, drawingColor, drawingWidth, drawings]);
+    selectedTokenIdRef.current = selectedTokenId;
+    onDeleteTokenRef.current = onDeleteToken;
+  }, [activeDrawingTool, drawingColor, drawingWidth, drawings, selectedTokenId, onDeleteToken]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -116,7 +121,7 @@ export default function VTTCanvas({
     const gridContainer = new PIXI.Graphics();
     const drawingsContainer = new PIXI.Container();
     const tokensContainer = new PIXI.Container();
-    const interactionLayer = new PIXI.Container(); // Container for temp interaction graphics & text
+    const interactionLayer = new PIXI.Container();
 
     viewport.addChild(bgContainer);
     viewport.addChild(trailContainer);
@@ -254,7 +259,6 @@ export default function VTTCanvas({
           gfx.lineTo(start.x, start.y);
           gfx.endFill();
         } else if (drawingToolRef.current === 'ruler') {
-          // Temporary Tactical Ruler Guide (Clean single frame rendering)
           gfx.lineStyle(3, 0xe2c077, 1);
           gfx.moveTo(start.x, start.y);
           gfx.lineTo(localPos.x, localPos.y);
@@ -350,13 +354,18 @@ export default function VTTCanvas({
       setPanPos({ x: viewport.position.x, y: viewport.position.y });
     };
 
-    canvasElement.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    canvasElement.addEventListener('wheel', onWheel, { passive: false });
-
-    // Handle Spacebar Waypoints during Token Dragging
+    // Keyboard Shortcuts (Delete Key & Spacebar)
     const onKeyDown = (e) => {
+      const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+
+      if ((e.code === 'Delete' || e.code === 'Backspace') && selectedTokenIdRef.current && !isTyping) {
+        e.preventDefault();
+        if (onDeleteTokenRef.current) {
+          onDeleteTokenRef.current(selectedTokenIdRef.current);
+        }
+        return;
+      }
+
       if (e.code === 'Space' && draggingTokenRef.current) {
         e.preventDefault();
         const mousePos = pixiAppRef.current.renderer.events.pointer.global;
@@ -369,6 +378,10 @@ export default function VTTCanvas({
       }
     };
 
+    canvasElement.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    canvasElement.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('keydown', onKeyDown);
 
     return () => {

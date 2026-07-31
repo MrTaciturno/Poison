@@ -144,7 +144,6 @@ export default function App() {
   };
 
   const handleSelectTab = (tab) => {
-    // If navigating away from drawing menu, reset active drawing tool to null
     if (tab !== 'drawing') {
       setActiveDrawingTool(null);
     }
@@ -174,11 +173,11 @@ export default function App() {
             drawings={drawings}
             selectedTokenId={selectedTokenId}
             onSelectToken={(token) => {
-              // Highlight token selection without forcing open the tokens properties menu
               setSelectedTokenId(token.id);
             }}
             onMoveToken={handleMoveToken}
             onAddToken={handleAddToken}
+            onDeleteToken={handleDeleteToken}
             onAddDrawing={handleAddDrawing}
             onDeleteDrawing={handleDeleteDrawing}
             activeDrawingTool={activeDrawingTool}
@@ -209,6 +208,7 @@ export default function App() {
             mapState={mapState}
             onUpdateMap={handleUpdateMap}
             currentUser={currentUser}
+            socket={socket}
             onUpdateSheet={handleUpdateSheet}
             onOpenFullSheet={() => setIsSheetModalOpen(true)}
             tokens={tokens}
@@ -228,10 +228,12 @@ export default function App() {
             rollHistory={rollHistory}
           />
 
-          {/* Full Interactive Poise Character Sheet Modal (Only opened via explicit button inside SheetMenu) */}
+          {/* Full Interactive Poise Character Sheet Modal */}
           {isSheetModalOpen && currentUser.sheetData && (
             <PoiseSheetViewer
               sheet={currentUser.sheetData}
+              currentUser={currentUser}
+              socket={socket}
               onUpdateSheet={handleUpdateSheet}
               onClose={() => setIsSheetModalOpen(false)}
             />

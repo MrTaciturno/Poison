@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { exportPoiseFile } from '../../utils/poiseParser.js';
 
-export default function PoiseSheetViewer({ sheet, onUpdateSheet, onClose, onSpawnItemToMap }) {
+export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateSheet, onClose }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(true);
-  const [fields, setFields] = useState(sheet.fields || []);
-  // Default zoom 0.48 so the entire sheet page fits inside the window on initial load
+  const [fields, setFields] = useState(sheet?.fields || []);
   const [zoom, setZoom] = useState(0.48);
+
+  const stagingInventory = currentUser?.stagingInventory || [];
+  const gridSlots = Array.from({ length: 12 }, (_, i) => stagingInventory[i] || null);
 
   if (!sheet) return null;
 
@@ -52,7 +54,7 @@ export default function PoiseSheetViewer({ sheet, onUpdateSheet, onClose, onSpaw
         top: isExpanded ? '30px' : '75px',
         left: isExpanded ? '3vw' : '22vw',
         width: isExpanded ? '94vw' : '56vw',
-        height: isExpanded ? '90vh' : '68vh',
+        height: isExpanded ? '90vh' : '72vh',
         zIndex: 100,
         backgroundColor: 'var(--bg-dark-wood)',
         border: '3px solid var(--metal-gold)',
@@ -103,7 +105,7 @@ export default function PoiseSheetViewer({ sheet, onUpdateSheet, onClose, onSpaw
         </div>
       </div>
 
-      {/* Main Interactive Sheet Viewport (Scrollable & Fit by Default) */}
+      {/* Main Interactive Sheet Viewport & Bottom Staging Inventory */}
       <div
         onWheel={handleWheelZoom}
         style={{
@@ -112,9 +114,9 @@ export default function PoiseSheetViewer({ sheet, onUpdateSheet, onClose, onSpaw
           overflow: 'auto',
           backgroundColor: '#120c09',
           display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'flex-start',
-          padding: '16px'
+          flexDirection: 'column',
+          alignItems: 'center',
+          padding: '16px 16px 24px 16px'
         }}
       >
         <div
@@ -231,6 +233,67 @@ export default function PoiseSheetViewer({ sheet, onUpdateSheet, onClose, onSpaw
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Lower Portion: 3x4 Temporary Staging Inventory Grid */}
+        <div
+          style={{
+            marginTop: '24px',
+            width: '100%',
+            maxWidth: '680px',
+            backgroundColor: 'var(--bg-panel-wood)',
+            border: '2px solid var(--metal-gold)',
+            borderRadius: '8px',
+            padding: '12px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.6)'
+          }}
+        >
+          <div style={{ fontFamily: 'var(--font-title)', fontSize: '1rem', color: 'var(--metal-gold-bright)', marginBottom: '6px', textAlign: 'center' }}>
+            Grid Temporário de Equipamentos do Personagem (3x4)
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '8px',
+              backgroundColor: '#1b130e',
+              padding: '8px',
+              borderRadius: '6px'
+            }}
+          >
+            {gridSlots.map((item, idx) => (
+              <div
+                key={idx}
+                style={{
+                  height: '70px',
+                  backgroundColor: item ? '#2a1f18' : '#120d09',
+                  border: item ? '1.5px solid var(--metal-gold)' : '1px dashed var(--metal-bronze)',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '2px'
+                }}
+              >
+                {item ? (
+                  <>
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      style={{ maxHeight: '42px', maxWidth: '100%', objectFit: 'contain' }}
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                    <div style={{ fontSize: '0.68rem', fontWeight: 'bold', color: 'var(--metal-gold-bright)' }}>
+                      {item.name} ({item.gridW}x{item.gridH})
+                    </div>
+                  </>
+                ) : (
+                  <span style={{ fontSize: '0.65rem', color: '#5a4636' }}>Slot {idx + 1}</span>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>

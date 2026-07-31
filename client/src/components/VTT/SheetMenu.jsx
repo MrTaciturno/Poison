@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { parsePoiseFile, exportPoiseFile } from '../../utils/poiseParser.js';
 
-export default function SheetMenu({ currentUser, onUpdateSheet, onOpenFullSheet, onAddToken, onDeleteToken }) {
-  const [sheet, setSheet] = useState(currentUser.sheetData || null);
+export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFullSheet, onAddToken, onDeleteToken }) {
+  const [sheet, setSheet] = useState(currentUser?.sheetData || null);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const stagingInventory = currentUser?.stagingInventory || [];
 
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
@@ -13,13 +15,7 @@ export default function SheetMenu({ currentUser, onUpdateSheet, onOpenFullSheet,
     reader.onload = (evt) => {
       const result = parsePoiseFile(evt.target.result);
       if (result.success) {
-        const loadedData = {
-          ...result.data,
-          inventory: result.data.inventory || [
-            { id: 'item_1', name: 'IC1x1', label: 'Adaga (1x1)', gridW: 1, gridH: 1, imageUrl: '/Equip/IC1x1.png' },
-            { id: 'item_2', name: 'IC1x2', label: 'Espada Curta (1x2)', gridW: 1, gridH: 2, imageUrl: '/Equip/IC1x2.png' }
-          ]
-        };
+        const loadedData = { ...result.data };
         setSheet(loadedData);
         onUpdateSheet(loadedData);
         setErrorMsg('');
@@ -40,33 +36,30 @@ export default function SheetMenu({ currentUser, onUpdateSheet, onOpenFullSheet,
     onUpdateSheet(null);
   };
 
-  // Add Item to Inventory from Map or Presets
-  const handleAddItemToInventory = (itemObj) => {
-    if (!sheet) return;
-    const currentInv = sheet.inventory || [];
+  // Add Item to 3x4 Staging Grid from Map or Drag
+  const handleAddItemToStaging = (itemObj) => {
     const newItem = {
-      id: `inv_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      id: `equip_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       name: itemObj.baseName || itemObj.name || 'Equipamento',
       label: itemObj.baseName || itemObj.name || 'Equipamento',
       gridW: itemObj.gridW || 1,
       gridH: itemObj.gridH || 1,
-      imageUrl: itemObj.imageUrl || itemObj.url || `/Equip/${itemObj.name}.png`
+      imageUrl: itemObj.imageUrl || `/Equip/${itemObj.name}.png`
     };
 
-    const updatedSheet = { ...sheet, inventory: [...currentInv, newItem] };
-    setSheet(updatedSheet);
-    onUpdateSheet(updatedSheet);
+    const updatedStaging = [...stagingInventory, newItem];
+    if (socket) {
+      socket.emit('update_staging_inventory', updatedStaging);
+    }
 
-    // If item came from map token, remove it from map
+    // Remove item token from map if it came from the map
     if (itemObj.tokenId && onDeleteToken) {
       onDeleteToken(itemObj.tokenId);
     }
   };
 
-  // Move Item from Inventory back to Map Grid
+  // Spawn item from 3x4 Staging Grid onto VTT Map
   const handlePlaceItemOnMap = (item, index) => {
-    if (!sheet) return;
-    // Spawn onto map grid
     if (onAddToken) {
       onAddToken({
         baseName: item.name || 'Equipamento',
@@ -78,96 +71,132 @@ export default function SheetMenu({ currentUser, onUpdateSheet, onOpenFullSheet,
       });
     }
 
-    // Remove from inventory grid
-    const currentInv = [...(sheet.inventory || [])];
-    currentInv.splice(index, 1);
-    const updatedSheet = { ...sheet, inventory: currentInv };
-    setSheet(updatedSheet);
-    onUpdateSheet(updatedSheet);
+    // Remove from 3x4 staging inventory
+    const updatedStaging = [...stagingInventory];
+    updatedStaging.splice(index, 1);
+    if (socket) {
+      socket.emit('update_staging_inventory', updatedStaging);
+    }
   };
 
-  // HTML5 Drop handler on Inventory Grid
-  const handleInventoryDrop = (e) => {
+  // HTML5 Drop on 3x4 Staging Grid
+  const handleStagingDrop = (e) => {
     e.preventDefault();
     const dataStr = e.dataTransfer.getData('text/plain');
     if (!dataStr) return;
 
     try {
       const payload = JSON.parse(dataStr);
-      handleAddItemToInventory(payload);
+      handleAddItemToStaging(payload);
     } catch (err) {
-      console.error('Erro ao soltar item no inventário:', err);
+      console.error('Erro ao soltar no grid temporário:', err);
     }
   };
 
-  if (!sheet) {
-    return (
-      <div className="panel-section">
-        <div className="panel-section-title">Upload de Planilha .poise</div>
-        <p style={{ fontSize: '0.85rem', color: 'var(--parchment-muted)' }}>
-          Selecione seu arquivo de personagem no formato <code>.poise</code> para carregar todas as suas estatísticas e inventário do personagem.
-        </p>
-        <input type="file" accept=".poise,.json" onChange={handleFileUpload} style={{ marginTop: '8px' }} />
-        {errorMsg && <p style={{ color: 'var(--accent-red)', fontSize: '0.85rem', marginTop: '8px' }}>{errorMsg}</p>}
-      </div>
-    );
-  }
-
-  const inventoryList = sheet.inventory || [];
+  // Generate 12 fixed slots (3 columns x 4 rows)
+  const gridSlots = Array.from({ length: 12 }, (_, i) => stagingInventory[i] || null);
 
   return (
     <div className="sheet-container">
-      {/* Action Buttons Header */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
-        <button className="btn-primary" onClick={onOpenFullSheet}>
-          Abrir Planilha Completa (Janela)
-        </button>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={handleSaveSheet} style={{ flex: 1 }}>Salvar .poise</button>
-          <button className="btn-danger" onClick={handleClearSheet} style={{ flex: 1 }}>Trocar Arquivo</button>
+      {/* 1. Sheet Upload or Actions Section */}
+      {!sheet ? (
+        <div className="panel-section">
+          <div className="panel-section-title">Upload de Planilha .poise</div>
+          <p style={{ fontSize: '0.82rem', color: 'var(--parchment-muted)' }}>
+            Selecione seu arquivo de personagem no formato <code>.poise</code> para carregar todas as suas estatísticas.
+          </p>
+          <input type="file" accept=".poise,.json" onChange={handleFileUpload} style={{ marginTop: '8px' }} />
+          {errorMsg && <p style={{ color: 'var(--accent-red)', fontSize: '0.85rem', marginTop: '8px' }}>{errorMsg}</p>}
         </div>
-      </div>
-
-      {/* Sheet Summary */}
-      <div className="panel-section">
-        <div className="panel-section-title">Resumo do Personagem</div>
-        <div className="sheet-field-group">
-          <label className="sheet-field-label">Nome:</label>
-          <div style={{ fontWeight: 'bold', color: 'var(--metal-gold-bright)' }}>{sheet.name || 'Personagem Poise'}</div>
+      ) : (
+        <div className="panel-section">
+          <div className="panel-section-title">Planilha: {sheet.name || 'Personagem'}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+            <button className="btn-primary" onClick={onOpenFullSheet}>
+              Abrir Planilha Completa (Janela)
+            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={handleSaveSheet} style={{ flex: 1 }}>Salvar .poise</button>
+              <button className="btn-danger" onClick={handleClearSheet} style={{ flex: 1 }}>Trocar Arquivo</button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Interactive Inventory Grid Section */}
-      <div className="panel-section" onDragOver={(e) => e.preventDefault()} onDrop={handleInventoryDrop}>
-        <div className="panel-section-title">Inventário da Planilha (Grid de Itens)</div>
+      {/* 2. ALWAYS VISIBLE 3x4 Temporary Equipment Grid (12 Slots) */}
+      <div
+        className="panel-section"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleStagingDrop}
+      >
+        <div className="panel-section-title">Grid Temporário de Equipamentos (3x4)</div>
         <p style={{ fontSize: '0.78rem', color: 'var(--parchment-muted)', marginBottom: '8px' }}>
-          Arraste um equipamento do mapa para esta área para guardá-lo. Clique em um item guardado para colocá-lo de volta no mapa.
+          Este grid serve para manipular itens entre o mapa VTT e a planilha. Clicar no item coloca-o no mapa.
         </p>
 
-        <div className="sheet-equipment-grid" style={{ minHeight: '120px' }}>
-          {inventoryList.length === 0 ? (
-            <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--parchment-dark)', fontSize: '0.8rem', padding: '16px 0' }}>
-              Nenhum item no inventário. Arraste itens para guardar aqui.
+        {/* 3 columns x 4 rows visual grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '6px',
+            backgroundColor: '#1b130e',
+            padding: '8px',
+            borderRadius: '6px',
+            border: '2px solid var(--metal-bronze)'
+          }}
+        >
+          {gridSlots.map((item, idx) => (
+            <div
+              key={idx}
+              onClick={() => item && handlePlaceItemOnMap(item, idx)}
+              style={{
+                width: '100%',
+                height: '75px',
+                backgroundColor: item ? '#2a1f18' : '#120d09',
+                border: item ? '1.5px solid var(--metal-gold)' : '1px dashed var(--metal-bronze)',
+                borderRadius: '4px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: item ? 'pointer' : 'default',
+                padding: '2px',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              title={item ? `${item.name} (${item.gridW}x${item.gridH}) - Clique para colocar no mapa` : `Slot ${idx + 1}`}
+            >
+              {item ? (
+                <>
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    style={{ maxHeight: '48px', maxWidth: '100%', objectFit: 'contain' }}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                  <div
+                    style={{
+                      fontSize: '0.65rem',
+                      fontWeight: 'bold',
+                      color: 'var(--metal-gold-bright)',
+                      textAlign: 'center',
+                      lineHeight: '1',
+                      marginTop: '2px',
+                      whiteSpace: 'nowrap',
+                      textOverflow: 'ellipsis',
+                      overflow: 'hidden',
+                      width: '100%'
+                    }}
+                  >
+                    {item.name} ({item.gridW}x{item.gridH})
+                  </div>
+                </>
+              ) : (
+                <span style={{ fontSize: '0.65rem', color: '#5a4636' }}>{idx + 1}</span>
+              )}
             </div>
-          ) : (
-            inventoryList.map((item, idx) => (
-              <div
-                key={item.id || idx}
-                className="asset-thumb-card"
-                onClick={() => handlePlaceItemOnMap(item, idx)}
-                title="Clique para colocar no mapa VTT"
-                style={{ cursor: 'pointer', border: '1px solid var(--metal-gold)' }}
-              >
-                <img
-                  src={item.imageUrl || `/Equip/${item.name}.png`}
-                  alt={item.label || item.name}
-                  className="asset-thumb-img"
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
-                <div className="asset-thumb-name">{item.label || item.name} ({item.gridW || 1}x{item.gridH || 1})</div>
-              </div>
-            ))
-          )}
+          ))}
         </div>
       </div>
     </div>

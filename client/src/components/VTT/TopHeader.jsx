@@ -72,7 +72,7 @@ export default function TopHeader({
           className={`menu-nav-btn ${activeTab === 'sheet' ? 'active' : ''}`}
           onClick={() => onSelectTab(activeTab === 'sheet' ? null : 'sheet')}
         >
-          {currentUser.sheetData ? 'Planilha' : 'Menu Planilha'}
+          Planilha
         </button>
 
         {currentUser.isMaster && (

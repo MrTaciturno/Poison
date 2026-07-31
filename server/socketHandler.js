@@ -59,7 +59,8 @@ export function setupSocketHandler(io) {
         id: socket.id,
         name: userName,
         isMaster,
-        sheetData: null
+        sheetData: null,
+        stagingInventory: []
       };
 
       room.players.push(currentUser);
@@ -143,7 +144,7 @@ export function setupSocketHandler(io) {
       io.to(currentRoom).emit('tokens_updated', room.tokens);
     });
 
-    // Update Token properties
+    // Update Token properties (or assign token to player)
     socket.on('update_token', (updatedToken) => {
       if (!currentRoom) return;
       const room = rooms.get(currentRoom);
@@ -156,15 +157,85 @@ export function setupSocketHandler(io) {
       const canControl = currentUser.isMaster || token.assignedPlayerId === currentUser.id;
       if (!canControl) return;
 
+      // If token is assigned to a player, check if it's an equipment item being assigned
+      if (updatedToken.assignedPlayerId && updatedToken.assignedPlayerId !== token.assignedPlayerId) {
+        const targetPlayer = room.players.find(p => p.id === updatedToken.assignedPlayerId);
+        if (targetPlayer && (token.gridW > 1 || token.gridH > 1 || token.baseName.startsWith('IC'))) {
+          // Transfer equipment to target player's 3x4 staging inventory
+          if (!targetPlayer.stagingInventory) targetPlayer.stagingInventory = [];
+          targetPlayer.stagingInventory.push({
+            id: `equip_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+            name: token.baseName || token.name,
+            label: token.name,
+            imageUrl: token.imageUrl,
+            gridW: token.gridW || 1,
+            gridH: token.gridH || 1
+          });
+
+          // Remove equipment token from map grid
+          room.tokens = room.tokens.filter(t => t.id !== updatedToken.id);
+
+          io.to(currentRoom).emit('tokens_updated', room.tokens);
+          io.to(currentRoom).emit('players_updated', room.players);
+          return;
+        }
+      }
+
       room.tokens[index] = { ...token, ...updatedToken };
       io.to(currentRoom).emit('tokens_updated', room.tokens);
     });
 
-    // Delete Token (Master only)
-    socket.on('delete_token', (tokenId) => {
-      if (!currentRoom || !currentUser?.isMaster) return;
+    // Assign Equipment Token to Player (Removes token from map, places into player's 3x4 staging inventory)
+    socket.on('assign_equip_to_player', ({ tokenId, targetPlayerId }) => {
+      if (!currentRoom) return;
       const room = rooms.get(currentRoom);
       if (!room) return;
+
+      const token = room.tokens.find(t => t.id === tokenId);
+      if (!token) return;
+
+      const targetPlayer = room.players.find(p => p.id === targetPlayerId);
+      if (!targetPlayer) return;
+
+      if (!targetPlayer.stagingInventory) targetPlayer.stagingInventory = [];
+      targetPlayer.stagingInventory.push({
+        id: `equip_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        name: token.baseName || token.name,
+        label: token.name,
+        imageUrl: token.imageUrl,
+        gridW: token.gridW || 1,
+        gridH: token.gridH || 1
+      });
+
+      // Remove equipment token from map grid
+      room.tokens = room.tokens.filter(t => t.id !== tokenId);
+
+      io.to(currentRoom).emit('tokens_updated', room.tokens);
+      io.to(currentRoom).emit('players_updated', room.players);
+    });
+
+    // Update Staging Inventory directly
+    socket.on('update_staging_inventory', (stagingInventory) => {
+      if (!currentRoom || !currentUser) return;
+      const room = rooms.get(currentRoom);
+      if (!room) return;
+
+      currentUser.stagingInventory = stagingInventory;
+      io.to(currentRoom).emit('players_updated', room.players);
+    });
+
+    // Delete Token (Master only)
+    socket.on('delete_token', (tokenId) => {
+      if (!currentRoom) return;
+      const room = rooms.get(currentRoom);
+      if (!room) return;
+
+      const token = room.tokens.find(t => t.id === tokenId);
+      if (!token) return;
+
+      // Allow Master or Assigned Player to delete token (Delete key)
+      const canDelete = currentUser.isMaster || token.assignedPlayerId === currentUser.id;
+      if (!canDelete) return;
 
       room.tokens = room.tokens.filter(t => t.id !== tokenId);
       io.to(currentRoom).emit('tokens_updated', room.tokens);

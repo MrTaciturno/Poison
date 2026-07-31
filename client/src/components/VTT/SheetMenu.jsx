@@ -131,7 +131,7 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
       >
         <div className="panel-section-title">Grid Temporário de Equipamentos (3x4)</div>
         <p style={{ fontSize: '0.78rem', color: 'var(--parchment-muted)', marginBottom: '8px' }}>
-          Este grid serve para manipular itens entre o mapa VTT e a planilha. Clicar no item coloca-o no mapa.
+          Este grid serve para manipular itens entre o mapa VTT e a planilha. Clicar no item coloca-o no mapa. Arraste para a planilha aberta.
         </p>
 
         {/* 3 columns x 4 rows visual grid */}
@@ -149,6 +149,12 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
           {gridSlots.map((item, idx) => (
             <div
               key={idx}
+              draggable={!!item}
+              onDragStart={(e) => {
+                if (item) {
+                  e.dataTransfer.setData('text/plain', JSON.stringify({ item, index: idx }));
+                }
+              }}
               onClick={() => item && handlePlaceItemOnMap(item, idx)}
               style={{
                 width: '100%',
@@ -160,12 +166,12 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                cursor: item ? 'pointer' : 'default',
+                cursor: item ? 'grab' : 'default',
                 padding: '2px',
                 position: 'relative',
                 overflow: 'hidden'
               }}
-              title={item ? `${item.name} (${item.gridW}x${item.gridH}) - Clique para colocar no mapa` : `Slot ${idx + 1}`}
+              title={item ? `${item.name} (${item.gridW}x${item.gridH}) - Clique para mapa / Arraste para planilha` : `Slot ${idx + 1}`}
             >
               {item ? (
                 <>

@@ -10,6 +10,8 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
   const stagingInventory = currentUser?.stagingInventory || [];
   const gridSlots = Array.from({ length: 12 }, (_, i) => stagingInventory[i] || null);
 
+  const placedSheetItems = sheet?.equipmentGrid || [];
+
   if (!sheet) return null;
 
   const handleFieldChange = (fieldId, newValue) => {
@@ -35,7 +37,7 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
   };
 
   const handleSave = () => {
-    const updatedSheet = { ...sheet, fields };
+    const updatedSheet = { ...sheet, fields, equipmentGrid: placedSheetItems };
     exportPoiseFile(updatedSheet, `${sheet.name || 'personagem'}.poise`);
   };
 
@@ -44,6 +46,71 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
       e.preventDefault();
       const delta = e.deltaY < 0 ? 0.08 : -0.08;
       setZoom((prev) => Math.min(Math.max(0.3, prev + delta), 2.2));
+    }
+  };
+
+  // Drop item from 3x4 Staging Grid into 15x8 Sheet Grid at (col, row)
+  const handleDropOnSheetGrid = (e, col, row) => {
+    e.preventDefault();
+    const dataStr = e.dataTransfer.getData('text/plain');
+    if (!dataStr) return;
+
+    try {
+      const payload = JSON.parse(dataStr);
+      const itemToPlace = payload.item || payload;
+      const stagingIdx = payload.index;
+
+      const newItem = {
+        id: itemToPlace.id || `placed_${Date.now()}`,
+        name: itemToPlace.name,
+        imageUrl: itemToPlace.imageUrl,
+        gridW: itemToPlace.gridW || 1,
+        gridH: itemToPlace.gridH || 1,
+        col,
+        row
+      };
+
+      // Add to sheet equipmentGrid
+      const updatedEquipmentGrid = [...placedSheetItems, newItem];
+      const updatedSheet = { ...sheet, fields, equipmentGrid: updatedEquipmentGrid };
+      onUpdateSheet(updatedSheet);
+
+      // Remove from staging inventory if it came from staging
+      if (stagingIdx !== undefined && stagingIdx >= 0) {
+        const updatedStaging = [...stagingInventory];
+        updatedStaging.splice(stagingIdx, 1);
+        if (socket) {
+          socket.emit('update_staging_inventory', updatedStaging);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao soltar item no grid da planilha:', err);
+    }
+  };
+
+  // Remove item from 15x8 Sheet Grid and return to 3x4 Staging Inventory
+  const handleRemoveFromSheetGrid = (itemIndex) => {
+    const itemToRemove = placedSheetItems[itemIndex];
+    if (!itemToRemove) return;
+
+    // Remove from sheet equipmentGrid
+    const updatedEquipmentGrid = [...placedSheetItems];
+    updatedEquipmentGrid.splice(itemIndex, 1);
+    const updatedSheet = { ...sheet, fields, equipmentGrid: updatedEquipmentGrid };
+    onUpdateSheet(updatedSheet);
+
+    // Add back to staging inventory
+    const updatedStaging = [...stagingInventory, {
+      id: itemToRemove.id,
+      name: itemToRemove.name,
+      label: itemToRemove.name,
+      imageUrl: itemToRemove.imageUrl,
+      gridW: itemToRemove.gridW,
+      gridH: itemToRemove.gridH
+    }];
+
+    if (socket) {
+      socket.emit('update_staging_inventory', updatedStaging);
     }
   };
 
@@ -233,6 +300,82 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                 </div>
               );
             })}
+
+            {/* 15x8 Interactive Sheet Inventory Overlay Grid */}
+            <div
+              style={{
+                position: 'absolute',
+                left: '6.2%',
+                top: '52.5%',
+                width: '87.6%',
+                height: '36.8%',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(15, 1fr)',
+                gridTemplateRows: 'repeat(8, 1fr)',
+                zIndex: 10
+              }}
+            >
+              {/* Render 15x8 = 120 slot drop targets */}
+              {Array.from({ length: 120 }).map((_, slotIdx) => {
+                const col = slotIdx % 15;
+                const row = Math.floor(slotIdx / 15);
+                return (
+                  <div
+                    key={slotIdx}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleDropOnSheetGrid(e, col, row)}
+                    style={{
+                      border: '0.5px dashed rgba(166, 124, 82, 0.25)',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                );
+              })}
+
+              {/* Render Placed Sheet Items */}
+              {placedSheetItems.map((item, idx) => {
+                const left = `${(item.col * 100) / 15}%`;
+                const top = `${(item.row * 100) / 8}%`;
+                const width = `${(item.gridW * 100) / 15}%`;
+                const height = `${(item.gridH * 100) / 8}%`;
+
+                return (
+                  <div
+                    key={item.id || idx}
+                    onClick={() => handleRemoveFromSheetGrid(idx)}
+                    title={`${item.name} - Clique para devolver ao grid temporário`}
+                    style={{
+                      position: 'absolute',
+                      left,
+                      top,
+                      width,
+                      height,
+                      border: '1.5px solid var(--metal-gold)',
+                      backgroundColor: 'rgba(42, 31, 24, 0.88)',
+                      borderRadius: '3px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.7)',
+                      zIndex: 15,
+                      padding: '1px',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      style={{ maxHeight: '75%', maxWidth: '95%', objectFit: 'contain' }}
+                    />
+                    <span style={{ fontSize: '0.58rem', fontWeight: 'bold', color: 'var(--metal-gold-bright)', whiteSpace: 'nowrap' }}>
+                      {item.name}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -249,9 +392,13 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
             boxShadow: '0 4px 16px rgba(0,0,0,0.6)'
           }}
         >
-          <div style={{ fontFamily: 'var(--font-title)', fontSize: '1rem', color: 'var(--metal-gold-bright)', marginBottom: '6px', textAlign: 'center' }}>
+          <div style={{ fontFamily: 'var(--font-title)', fontSize: '1rem', color: 'var(--metal-gold-bright)', marginBottom: '4px', textAlign: 'center' }}>
             Grid Temporário de Equipamentos do Personagem (3x4)
           </div>
+          <p style={{ fontSize: '0.76rem', color: 'var(--parchment-muted)', textAlign: 'center', marginBottom: '8px' }}>
+            Arraste um item daqui para as regiões da planilha acima (Destra, Carga 0, Traje, Sinistra, Carga 1, 2 ou 3).
+          </p>
+
           <div
             style={{
               display: 'grid',
@@ -265,6 +412,12 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
             {gridSlots.map((item, idx) => (
               <div
                 key={idx}
+                draggable={!!item}
+                onDragStart={(e) => {
+                  if (item) {
+                    e.dataTransfer.setData('text/plain', JSON.stringify({ item, index: idx }));
+                  }
+                }}
                 style={{
                   height: '70px',
                   backgroundColor: item ? '#2a1f18' : '#120d09',
@@ -274,7 +427,8 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '2px'
+                  padding: '2px',
+                  cursor: item ? 'grab' : 'default'
                 }}
               >
                 {item ? (

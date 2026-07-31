@@ -116,7 +116,7 @@ export default function VTTCanvas({
     const gridContainer = new PIXI.Graphics();
     const drawingsContainer = new PIXI.Container();
     const tokensContainer = new PIXI.Container();
-    const interactionLayer = new PIXI.Graphics();
+    const interactionLayer = new PIXI.Container(); // Container for temp interaction graphics & text
 
     viewport.addChild(bgContainer);
     viewport.addChild(trailContainer);
@@ -124,6 +124,10 @@ export default function VTTCanvas({
     viewport.addChild(drawingsContainer);
     viewport.addChild(tokensContainer);
     viewport.addChild(interactionLayer);
+
+    const clearInteractionLayer = () => {
+      interactionLayer.removeChildren();
+    };
 
     const handleResize = () => {
       if (!containerRef.current || !pixiAppRef.current) return;
@@ -184,9 +188,11 @@ export default function VTTCanvas({
       // Eraser Dragging Preview & Erase
       if (drawingToolRef.current === 'eraser') {
         const localPos = viewport.toLocal({ x: e.clientX, y: e.clientY });
-        interactionLayer.clear();
-        interactionLayer.lineStyle(2, 0x8b322c, 0.8);
-        interactionLayer.drawCircle(localPos.x, localPos.y, 15);
+        clearInteractionLayer();
+        const gfx = new PIXI.Graphics();
+        gfx.lineStyle(2, 0x8b322c, 0.8);
+        gfx.drawCircle(localPos.x, localPos.y, 15);
+        interactionLayer.addChild(gfx);
 
         if (isDrawingRef.current) {
           checkAndEraseAtPoint(localPos);
@@ -204,31 +210,33 @@ export default function VTTCanvas({
         const strokeW = drawingWidthRef.current || 3;
         const squareSize = mapState.gridSquareSize || 60;
 
-        interactionLayer.clear();
+        clearInteractionLayer();
+        const gfx = new PIXI.Graphics();
+        interactionLayer.addChild(gfx);
 
         if (drawingToolRef.current === 'freehand') {
           freehandPointsRef.current.push({ x: localPos.x, y: localPos.y });
-          interactionLayer.lineStyle(strokeW, colorHex, 0.9);
-          interactionLayer.moveTo(freehandPointsRef.current[0].x, freehandPointsRef.current[0].y);
-          freehandPointsRef.current.forEach(pt => interactionLayer.lineTo(pt.x, pt.y));
+          gfx.lineStyle(strokeW, colorHex, 0.9);
+          gfx.moveTo(freehandPointsRef.current[0].x, freehandPointsRef.current[0].y);
+          freehandPointsRef.current.forEach(pt => gfx.lineTo(pt.x, pt.y));
         } else if (drawingToolRef.current === 'straight_line') {
-          interactionLayer.lineStyle(strokeW, colorHex, 0.9);
-          interactionLayer.moveTo(start.x, start.y);
-          interactionLayer.lineTo(localPos.x, localPos.y);
+          gfx.lineStyle(strokeW, colorHex, 0.9);
+          gfx.moveTo(start.x, start.y);
+          gfx.lineTo(localPos.x, localPos.y);
         } else if (drawingToolRef.current === 'rectangle') {
-          interactionLayer.lineStyle(strokeW, colorHex, 0.9);
+          gfx.lineStyle(strokeW, colorHex, 0.9);
           const rx = Math.min(start.x, localPos.x);
           const ry = Math.min(start.y, localPos.y);
           const rw = Math.abs(localPos.x - start.x);
           const rh = Math.abs(localPos.y - start.y);
-          interactionLayer.drawRect(rx, ry, rw, rh);
+          gfx.drawRect(rx, ry, rw, rh);
         } else if (drawingToolRef.current === 'circle') {
-          interactionLayer.lineStyle(strokeW, colorHex, 0.9);
+          gfx.lineStyle(strokeW, colorHex, 0.9);
           const radius = Math.hypot(localPos.x - start.x, localPos.y - start.y);
-          interactionLayer.drawCircle(start.x, start.y, radius);
+          gfx.drawCircle(start.x, start.y, radius);
         } else if (drawingToolRef.current === 'cone') {
-          interactionLayer.lineStyle(strokeW, colorHex, 0.9);
-          interactionLayer.beginFill(colorHex, 0.25);
+          gfx.lineStyle(strokeW, colorHex, 0.9);
+          gfx.beginFill(colorHex, 0.25);
           const dx = localPos.x - start.x;
           const dy = localPos.y - start.y;
           const angle = Math.atan2(dy, dx);
@@ -240,16 +248,16 @@ export default function VTTCanvas({
           const rightX = start.x + len * Math.cos(angle + coneAngle / 2);
           const rightY = start.y + len * Math.sin(angle + coneAngle / 2);
 
-          interactionLayer.moveTo(start.x, start.y);
-          interactionLayer.lineTo(leftX, leftY);
-          interactionLayer.lineTo(rightX, rightY);
-          interactionLayer.lineTo(start.x, start.y);
-          interactionLayer.endFill();
+          gfx.moveTo(start.x, start.y);
+          gfx.lineTo(leftX, leftY);
+          gfx.lineTo(rightX, rightY);
+          gfx.lineTo(start.x, start.y);
+          gfx.endFill();
         } else if (drawingToolRef.current === 'ruler') {
-          // Temporary Tactical Ruler Guide (Live measurement preview)
-          interactionLayer.lineStyle(3, 0xe2c077, 1);
-          interactionLayer.moveTo(start.x, start.y);
-          interactionLayer.lineTo(localPos.x, localPos.y);
+          // Temporary Tactical Ruler Guide (Clean single frame rendering)
+          gfx.lineStyle(3, 0xe2c077, 1);
+          gfx.moveTo(start.x, start.y);
+          gfx.lineTo(localPos.x, localPos.y);
 
           const distPx = Math.hypot(localPos.x - start.x, localPos.y - start.y);
           const distSquares = (distPx / squareSize).toFixed(1);
@@ -272,23 +280,16 @@ export default function VTTCanvas({
         isPanning = false;
       }
 
-      if (drawingToolRef.current === 'eraser') {
+      if (drawingToolRef.current === 'eraser' || drawingToolRef.current === 'ruler') {
         isDrawingRef.current = false;
-        interactionLayer.clear();
-        return;
-      }
-
-      // Temporary Ruler Tool clears on release without leaving permanent lines
-      if (drawingToolRef.current === 'ruler') {
-        isDrawingRef.current = false;
-        interactionLayer.clear();
+        clearInteractionLayer();
         return;
       }
 
       // Finish Drawing & Emit Event to Server for persistent shapes
       if (isDrawingRef.current && drawingToolRef.current) {
         isDrawingRef.current = false;
-        interactionLayer.clear();
+        clearInteractionLayer();
         const localPos = viewport.toLocal({ x: e.clientX, y: e.clientY });
         const start = drawStartRef.current;
         if (!start) return;
@@ -575,11 +576,13 @@ export default function VTTCanvas({
         const currentGridX = Math.floor(localPos.x / squareSize);
         const currentGridY = Math.floor(localPos.y / squareSize);
 
-        interactionLayer.clear();
-        interactionLayer.lineStyle(3, 0xe2c077, 0.9);
+        interactionLayer.removeChildren();
+        const gfx = new PIXI.Graphics();
+        gfx.lineStyle(3, 0xe2c077, 0.9);
+        interactionLayer.addChild(gfx);
 
         let currentPt = { x: startGridPos.x * squareSize + squareSize / 2, y: startGridPos.y * squareSize + squareSize / 2 };
-        interactionLayer.moveTo(currentPt.x, currentPt.y);
+        gfx.moveTo(currentPt.x, currentPt.y);
 
         let totalSquares = 0;
         let prevGridPos = { x: startGridPos.x, y: startGridPos.y };
@@ -591,26 +594,26 @@ export default function VTTCanvas({
           prevGridPos = { x: wp.x, y: wp.y };
 
           const wpPx = { x: wp.x * squareSize + squareSize / 2, y: wp.y * squareSize + squareSize / 2 };
-          interactionLayer.lineTo(wpPx.x, wpPx.y);
-          interactionLayer.drawCircle(wpPx.x, wpPx.y, 4);
+          gfx.lineTo(wpPx.x, wpPx.y);
+          gfx.drawCircle(wpPx.x, wpPx.y, 4);
           currentPt = wpPx;
         });
 
         const targetPx = { x: currentGridX * squareSize + squareSize / 2, y: currentGridY * squareSize + squareSize / 2 };
-        interactionLayer.lineTo(targetPx.x, targetPx.y);
+        gfx.lineTo(targetPx.x, targetPx.y);
 
         const lastDx = currentGridX - prevGridPos.x;
         const lastDy = currentGridY - prevGridPos.y;
         totalSquares += Math.hypot(lastDx, lastDy);
 
         const angle = Math.atan2(targetPx.y - currentPt.y, targetPx.x - currentPt.x);
-        interactionLayer.beginFill(0xe2c077, 1);
-        interactionLayer.drawPolygon([
+        gfx.beginFill(0xe2c077, 1);
+        gfx.drawPolygon([
           targetPx.x, targetPx.y,
           targetPx.x - 12 * Math.cos(angle - Math.PI / 6), targetPx.y - 12 * Math.sin(angle - Math.PI / 6),
           targetPx.x - 12 * Math.cos(angle + Math.PI / 6), targetPx.y - 12 * Math.sin(angle + Math.PI / 6)
         ]);
-        interactionLayer.endFill();
+        gfx.endFill();
 
         // Live Movement Distance Badge Text Label
         const distText = new PIXI.Text(`${totalSquares.toFixed(1)} q. (${(totalSquares * 1.5).toFixed(1)}m)`, {
@@ -629,7 +632,7 @@ export default function VTTCanvas({
         if (!isDragging) return;
         isDragging = false;
         draggingTokenRef.current = null;
-        interactionLayer.clear();
+        interactionLayer.removeChildren();
 
         const localPos = viewport.toLocal(e.global);
         const finalGridX = Math.max(0, Math.min(cols - 1, Math.floor(localPos.x / squareSize)));

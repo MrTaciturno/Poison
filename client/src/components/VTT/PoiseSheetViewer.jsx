@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { exportPoiseFile } from '../../utils/poiseParser.js';
 
-export default function PoiseSheetViewer({ sheet, onUpdateSheet, onClose }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+export default function PoiseSheetViewer({ sheet, onUpdateSheet, onClose, onSpawnItemToMap }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(true);
   const [fields, setFields] = useState(sheet.fields || []);
-  const [zoom, setZoom] = useState(1.0);
+  // Default zoom 0.48 so the entire sheet page fits inside the window on initial load
+  const [zoom, setZoom] = useState(0.48);
 
   if (!sheet) return null;
 
@@ -39,8 +40,8 @@ export default function PoiseSheetViewer({ sheet, onUpdateSheet, onClose }) {
   const handleWheelZoom = (e) => {
     if (e.ctrlKey || e.altKey) {
       e.preventDefault();
-      const delta = e.deltaY < 0 ? 0.1 : -0.1;
-      setZoom((prev) => Math.min(Math.max(0.4, prev + delta), 2.5));
+      const delta = e.deltaY < 0 ? 0.08 : -0.08;
+      setZoom((prev) => Math.min(Math.max(0.3, prev + delta), 2.2));
     }
   };
 
@@ -48,10 +49,10 @@ export default function PoiseSheetViewer({ sheet, onUpdateSheet, onClose }) {
     <div
       style={{
         position: 'fixed',
-        top: isExpanded ? '30px' : '70px',
-        left: isExpanded ? '3vw' : '15vw',
-        width: isExpanded ? '94vw' : '70vw',
-        height: isExpanded ? '90vh' : '80vh',
+        top: isExpanded ? '30px' : '75px',
+        left: isExpanded ? '3vw' : '22vw',
+        width: isExpanded ? '94vw' : '56vw',
+        height: isExpanded ? '90vh' : '68vh',
         zIndex: 100,
         backgroundColor: 'var(--bg-dark-wood)',
         border: '3px solid var(--metal-gold)',
@@ -65,44 +66,44 @@ export default function PoiseSheetViewer({ sheet, onUpdateSheet, onClose }) {
       {/* Header Controls */}
       <div
         style={{
-          padding: '10px 16px',
+          padding: '8px 14px',
           backgroundColor: 'var(--bg-panel-wood)',
           borderBottom: '2px solid var(--metal-bronze)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          gap: '12px',
+          gap: '10px',
           flexWrap: 'wrap'
         }}
       >
-        <div style={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem', color: 'var(--metal-gold-bright)' }}>
+        <div style={{ fontFamily: 'var(--font-title)', fontSize: '1.1rem', color: 'var(--metal-gold-bright)' }}>
           Planilha Poise: {sheet.name || 'Personagem'}
         </div>
 
         {/* Zoom Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--sand-pastel)' }}>Zoom:</span>
-          <button onClick={() => setZoom((z) => Math.max(0.4, z - 0.1))} style={{ padding: '4px 8px' }}>-</button>
-          <span style={{ minWidth: '45px', textAlign: 'center', fontWeight: 'bold' }}>{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom((z) => Math.min(2.5, z + 0.1))} style={{ padding: '4px 8px' }}>+</button>
-          <button onClick={() => setZoom(1.0)} style={{ padding: '4px 8px' }}>Reset</button>
+          <button onClick={() => setZoom((z) => Math.max(0.3, z - 0.1))} style={{ padding: '2px 7px' }}>-</button>
+          <span style={{ minWidth: '45px', textAlign: 'center', fontWeight: 'bold', fontSize: '0.85rem' }}>{Math.round(zoom * 100)}%</span>
+          <button onClick={() => setZoom((z) => Math.min(2.2, z + 0.1))} style={{ padding: '2px 7px' }}>+</button>
+          <button onClick={() => setZoom(0.48)} style={{ padding: '2px 7px' }}>Ajustar</button>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => setIsEditing(!isEditing)}>
-            {isEditing ? 'Travar Edição' : 'Habilitar Edição'}
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button onClick={() => setIsEditing(!isEditing)} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
+            {isEditing ? 'Travar Edição' : 'Editar'}
           </button>
-          <button onClick={handleSave}>Salvar .poise</button>
-          <button onClick={() => setIsExpanded(!isExpanded)}>
-            {isExpanded ? 'Reduzir Janela' : 'Expandir Janela'}
+          <button onClick={handleSave} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>Salvar .poise</button>
+          <button onClick={() => setIsExpanded(!isExpanded)} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
+            {isExpanded ? 'Reduzir' : 'Expandir'}
           </button>
-          <button className="btn-danger" onClick={onClose}>
-            Fechar Planilha
+          <button className="btn-danger" onClick={onClose} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
+            Fechar
           </button>
         </div>
       </div>
 
-      {/* Main Interactive Sheet Viewport (Scrollable with Proportional Aspect Ratio) */}
+      {/* Main Interactive Sheet Viewport (Scrollable & Fit by Default) */}
       <div
         onWheel={handleWheelZoom}
         style={{
@@ -113,14 +114,14 @@ export default function PoiseSheetViewer({ sheet, onUpdateSheet, onClose }) {
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'flex-start',
-          padding: '32px'
+          padding: '16px'
         }}
       >
         <div
           style={{
             transform: `scale(${zoom})`,
             transformOrigin: 'top center',
-            transition: 'transform 0.15s ease-out'
+            transition: 'transform 0.12s ease-out'
           }}
         >
           <div

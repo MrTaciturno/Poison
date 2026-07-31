@@ -58,7 +58,13 @@ export default function SidebarPanel({
         )}
 
         {activeTab === 'sheet' && (
-          <SheetMenu currentUser={currentUser} onUpdateSheet={onUpdateSheet} onOpenFullSheet={onOpenFullSheet} />
+          <SheetMenu
+            currentUser={currentUser}
+            onUpdateSheet={onUpdateSheet}
+            onOpenFullSheet={onOpenFullSheet}
+            onAddToken={onAddToken}
+            onDeleteToken={onDeleteToken}
+          />
         )}
 
         {activeTab === 'tokens' && currentUser.isMaster && (

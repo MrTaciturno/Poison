@@ -59,6 +59,7 @@ export function setupSocketHandler(io) {
         id: socket.id,
         name: userName,
         isMaster,
+        isCoMaster: false,
         sheetData: null,
         stagingInventory: []
       };
@@ -79,9 +80,22 @@ export function setupSocketHandler(io) {
       io.emit('rooms_list_updated', getPublicRoomsList());
     });
 
-    // Master updates map settings
-    socket.on('update_map', (newMapState) => {
+    // Promote or Demote Co-Master (Primary Master only)
+    socket.on('toggle_co_master', ({ targetUserId }) => {
       if (!currentRoom || !currentUser?.isMaster) return;
+      const room = rooms.get(currentRoom);
+      if (!room) return;
+
+      const targetPlayer = room.players.find(p => p.id === targetUserId);
+      if (targetPlayer && !targetPlayer.isMaster) {
+        targetPlayer.isCoMaster = !targetPlayer.isCoMaster;
+        io.to(currentRoom).emit('players_updated', room.players);
+      }
+    });
+
+    // Master/Co-Master updates map settings
+    socket.on('update_map', (newMapState) => {
+      if (!currentRoom || !(currentUser?.isMaster || currentUser?.isCoMaster)) return;
       const room = rooms.get(currentRoom);
       if (!room) return;
 
@@ -92,7 +106,7 @@ export function setupSocketHandler(io) {
 
     // Add new Token
     socket.on('add_token', (tokenData) => {
-      if (!currentRoom || !currentUser?.isMaster) return;
+      if (!currentRoom || !(currentUser?.isMaster || currentUser?.isCoMaster)) return;
       const room = rooms.get(currentRoom);
       if (!room) return;
 
@@ -146,7 +160,7 @@ export function setupSocketHandler(io) {
       const token = room.tokens.find(t => t.id === tokenId);
       if (!token) return;
 
-      const canControl = currentUser.isMaster || token.assignedPlayerId === currentUser.id;
+      const canControl = currentUser.isMaster || currentUser.isCoMaster || token.assignedPlayerId === currentUser.id;
       if (!canControl) return;
 
       token.prevPath = waypoints || [{ x: token.x, y: token.y }, { x: newX, y: newY }];
@@ -166,7 +180,7 @@ export function setupSocketHandler(io) {
       if (index === -1) return;
 
       const token = room.tokens[index];
-      const canControl = currentUser.isMaster || token.assignedPlayerId === currentUser.id;
+      const canControl = currentUser.isMaster || currentUser.isCoMaster || token.assignedPlayerId === currentUser.id;
       if (!canControl) return;
 
       // If token is assigned to a player, check if it's an equipment item being assigned
@@ -236,7 +250,7 @@ export function setupSocketHandler(io) {
       io.to(currentRoom).emit('players_updated', room.players);
     });
 
-    // Delete Token (Master only)
+    // Delete Token (Master or Co-Master or Assigned Player)
     socket.on('delete_token', (tokenId) => {
       if (!currentRoom) return;
       const room = rooms.get(currentRoom);
@@ -245,8 +259,7 @@ export function setupSocketHandler(io) {
       const token = room.tokens.find(t => t.id === tokenId);
       if (!token) return;
 
-      // Allow Master or Assigned Player to delete token (Delete key)
-      const canDelete = currentUser.isMaster || token.assignedPlayerId === currentUser.id;
+      const canDelete = currentUser.isMaster || currentUser.isCoMaster || token.assignedPlayerId === currentUser.id;
       if (!canDelete) return;
 
       room.tokens = room.tokens.filter(t => t.id !== tokenId);
@@ -261,16 +274,13 @@ export function setupSocketHandler(io) {
 
       const newDrawing = {
         id: `draw_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        authorId: currentUser.id,
-        authorName: currentUser.name,
         ...drawingData
       };
-
       room.drawings.push(newDrawing);
       io.to(currentRoom).emit('drawings_updated', room.drawings);
     });
 
-    // Delete Single Drawing (Eraser)
+    // Delete Drawing
     socket.on('delete_drawing', (drawingId) => {
       if (!currentRoom) return;
       const room = rooms.get(currentRoom);
@@ -280,9 +290,9 @@ export function setupSocketHandler(io) {
       io.to(currentRoom).emit('drawings_updated', room.drawings);
     });
 
-    // Clear Drawings
+    // Clear All Drawings (Master or Co-Master only)
     socket.on('clear_drawings', () => {
-      if (!currentRoom) return;
+      if (!currentRoom || !(currentUser?.isMaster || currentUser?.isCoMaster)) return;
       const room = rooms.get(currentRoom);
       if (!room) return;
 
@@ -290,7 +300,7 @@ export function setupSocketHandler(io) {
       io.to(currentRoom).emit('drawings_updated', room.drawings);
     });
 
-    // Upload / Update Character Sheet
+    // Save/Update Poise Sheet
     socket.on('update_sheet', (sheetData) => {
       if (!currentRoom || !currentUser) return;
       const room = rooms.get(currentRoom);
@@ -300,60 +310,67 @@ export function setupSocketHandler(io) {
       io.to(currentRoom).emit('players_updated', room.players);
     });
 
-    // Dice Roll Event
-    socket.on('roll_dice', ({ diceType, numDice = 1, bonus = 0, label = '' }) => {
+    // Roll Dice Event
+    socket.on('roll_dice', ({ formula, label }) => {
       if (!currentRoom || !currentUser) return;
       const room = rooms.get(currentRoom);
       if (!room) return;
 
-      let sides = 20;
-      if (diceType === 'd%') sides = 100;
-      else {
-        const match = diceType.match(/d(\d+)/i);
-        if (match) sides = parseInt(match[1], 10);
-      }
-
-      const rolls = [];
+      let resultText = '';
       let total = 0;
-      for (let i = 0; i < numDice; i++) {
-        const val = Math.floor(Math.random() * sides) + 1;
-        rolls.push(val);
-        total += val;
+
+      try {
+        const match = formula.match(/^(\d+)d(\d+)([+-]\d+)?$/i);
+        if (match) {
+          const count = parseInt(match[1], 10);
+          const sides = parseInt(match[2], 10);
+          const mod = match[3] ? parseInt(match[3], 10) : 0;
+
+          const rolls = [];
+          for (let i = 0; i < count; i++) {
+            rolls.push(Math.floor(Math.random() * sides) + 1);
+          }
+          const sum = rolls.reduce((a, b) => a + b, 0);
+          total = sum + mod;
+          resultText = `[${rolls.join(', ')}]${mod ? (mod > 0 ? ` + ${mod}` : ` ${mod}`) : ''} = ${total}`;
+        } else {
+          total = Math.floor(Math.random() * 20) + 1;
+          resultText = `Resultado d20: ${total}`;
+        }
+      } catch (err) {
+        total = 0;
+        resultText = 'Erro na fórmula de dados';
       }
-      const finalResult = total + bonus;
 
-      const assignedToken = room.tokens.find(t => t.assignedPlayerId === currentUser.id);
-      const displayName = assignedToken ? `${currentUser.name} (${assignedToken.name})` : currentUser.name;
-
-      const rollObj = {
+      const rollEntry = {
         id: `roll_${Date.now()}`,
-        userName: displayName,
-        diceType: `${numDice}${diceType}`,
-        bonus,
+        userName: currentUser.name,
+        formula,
         label: label || 'Rolagem',
-        rolls,
+        resultText,
         total,
-        finalResult,
-        timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
       };
 
-      room.rollHistory.unshift(rollObj);
-      if (room.rollHistory.length > 50) room.rollHistory.pop();
+      room.rollHistory.push(rollEntry);
+      if (room.rollHistory.length > 50) room.rollHistory.shift();
 
-      io.to(currentRoom).emit('dice_rolled', rollObj);
       io.to(currentRoom).emit('roll_history_updated', room.rollHistory);
     });
 
-    // Disconnect
+    // Handle Disconnect
     socket.on('disconnect', () => {
       if (currentRoom && rooms.has(currentRoom)) {
         const room = rooms.get(currentRoom);
         room.players = room.players.filter(p => p.id !== socket.id);
+
         if (room.players.length === 0) {
           rooms.delete(currentRoom);
         } else {
+          // If master disconnected, assign primary master role to first remaining player
           if (currentUser?.isMaster && room.players.length > 0) {
             room.players[0].isMaster = true;
+            room.players[0].isCoMaster = false;
           }
           io.to(currentRoom).emit('players_updated', room.players);
         }

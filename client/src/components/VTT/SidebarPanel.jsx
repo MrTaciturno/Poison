@@ -22,6 +22,7 @@ export default function SidebarPanel({
   onAddToken,
   onUpdateToken,
   onDeleteToken,
+  onToggleCoMaster,
   activeDrawingTool,
   onSelectTool,
   drawingColor,
@@ -33,6 +34,8 @@ export default function SidebarPanel({
   rollHistory
 }) {
   if (!activeTab) return null;
+
+  const isMasterOrCoMaster = currentUser?.isMaster || currentUser?.isCoMaster;
 
   const tabTitles = {
     map: 'Menu do Mapa',
@@ -54,7 +57,7 @@ export default function SidebarPanel({
       </div>
 
       <div className="sidebar-content">
-        {activeTab === 'map' && currentUser.isMaster && (
+        {activeTab === 'map' && isMasterOrCoMaster && (
           <MapMenu mapState={mapState} onUpdateMap={onUpdateMap} />
         )}
 
@@ -69,7 +72,7 @@ export default function SidebarPanel({
           />
         )}
 
-        {activeTab === 'tokens' && currentUser.isMaster && (
+        {activeTab === 'tokens' && isMasterOrCoMaster && (
           <TokensMenu
             tokens={tokens}
             selectedToken={selectedToken}
@@ -96,12 +99,18 @@ export default function SidebarPanel({
           <DiceMenu onRollDice={onRollDice} rollHistory={rollHistory} />
         )}
 
-        {activeTab === 'items' && currentUser.isMaster && (
+        {activeTab === 'items' && isMasterOrCoMaster && (
           <ItemsMenu onAddToken={onAddToken} />
         )}
 
         {activeTab === 'settings' && (
-          <SettingsMenu mapState={mapState} onUpdateMap={onUpdateMap} />
+          <SettingsMenu
+            mapState={mapState}
+            onUpdateMap={onUpdateMap}
+            players={players}
+            currentUser={currentUser}
+            onToggleCoMaster={onToggleCoMaster}
+          />
         )}
       </div>
     </div>

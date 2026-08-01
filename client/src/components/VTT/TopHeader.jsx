@@ -12,9 +12,11 @@ export default function TopHeader({
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(mapState.name || 'Mapa sem Título');
 
+  const isMasterOrCoMaster = currentUser?.isMaster || currentUser?.isCoMaster;
+
   const handleSaveName = () => {
     setIsEditingName(false);
-    if (tempName.trim() && currentUser.isMaster) {
+    if (tempName.trim() && isMasterOrCoMaster) {
       onUpdateMapName(tempName.trim());
     }
   };
@@ -23,7 +25,7 @@ export default function TopHeader({
     <div className="vtt-top-header">
       {/* Left: Map Name */}
       <div className="header-left">
-        {currentUser.isMaster && isEditingName ? (
+        {isMasterOrCoMaster && isEditingName ? (
           <input
             className="header-map-input"
             type="text"
@@ -36,9 +38,9 @@ export default function TopHeader({
         ) : (
           <div
             className="header-map-name"
-            onClick={() => currentUser.isMaster && setIsEditingName(true)}
-            style={{ cursor: currentUser.isMaster ? 'pointer' : 'default' }}
-            title={currentUser.isMaster ? 'Clique para editar o nome do mapa' : ''}
+            onClick={() => isMasterOrCoMaster && setIsEditingName(true)}
+            style={{ cursor: isMasterOrCoMaster ? 'pointer' : 'default' }}
+            title={isMasterOrCoMaster ? 'Clique para editar o nome do mapa' : ''}
           >
             {mapState.name || 'Mapa sem Título'}
           </div>
@@ -49,8 +51,9 @@ export default function TopHeader({
       <div className="header-center">
         <div className="header-players">
           {players.map((p) => (
-            <div key={p.id} className={`player-badge ${p.isMaster ? 'is-master' : ''}`}>
+            <div key={p.id} className={`player-badge ${p.isMaster ? 'is-master' : p.isCoMaster ? 'is-comaster' : ''}`}>
               {p.isMaster && <span className="master-icon-text">[Mestre]</span>}
+              {p.isCoMaster && !p.isMaster && <span className="master-icon-text" style={{ color: 'var(--metal-gold-bright)' }}>[Co-Mestre]</span>}
               <span>{p.name}</span>
             </div>
           ))}
@@ -59,7 +62,7 @@ export default function TopHeader({
 
       {/* Right: Navigation Menus & Leave Button */}
       <div className="header-right">
-        {currentUser.isMaster && (
+        {isMasterOrCoMaster && (
           <button
             className={`menu-nav-btn ${activeTab === 'map' ? 'active' : ''}`}
             onClick={() => onSelectTab(activeTab === 'map' ? null : 'map')}
@@ -75,7 +78,7 @@ export default function TopHeader({
           Planilha
         </button>
 
-        {currentUser.isMaster && (
+        {isMasterOrCoMaster && (
           <button
             className={`menu-nav-btn ${activeTab === 'tokens' ? 'active' : ''}`}
             onClick={() => onSelectTab(activeTab === 'tokens' ? null : 'tokens')}
@@ -98,7 +101,7 @@ export default function TopHeader({
           Dados
         </button>
 
-        {currentUser.isMaster && (
+        {isMasterOrCoMaster && (
           <button
             className={`menu-nav-btn ${activeTab === 'items' ? 'active' : ''}`}
             onClick={() => onSelectTab(activeTab === 'items' ? null : 'items')}

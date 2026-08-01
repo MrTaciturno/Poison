@@ -217,6 +217,7 @@ export default function App() {
             onAddToken={handleAddToken}
             onUpdateToken={handleUpdateToken}
             onDeleteToken={handleDeleteToken}
+            onToggleCoMaster={handleToggleCoMaster}
             activeDrawingTool={activeDrawingTool}
             onSelectTool={setActiveDrawingTool}
             drawingColor={drawingColor}

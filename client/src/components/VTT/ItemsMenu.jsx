@@ -13,18 +13,35 @@ export default function ItemsMenu({ onAddToken }) {
       .catch(() => setEquipList([]));
   }, []);
 
+  const getDimensions = (item) => {
+    if (!item) return { gridW: 1, gridH: 1 };
+    let gridW = item.gridW || item.cols || 0;
+    let gridH = item.gridH || item.rows || 0;
+    if (!gridW || !gridH) {
+      const strToTest = `${item.name || ''} ${item.filename || ''} ${item.url || ''}`;
+      const match = strToTest.match(/(\d+)x(\d+)/i);
+      if (match) {
+        gridW = gridW || parseInt(match[1], 10);
+        gridH = gridH || parseInt(match[2], 10);
+      }
+    }
+    return { gridW: gridW || 1, gridH: gridH || 1 };
+  };
+
   const handleSelectItem = (item) => {
     setSelectedItem(item);
     setCustomName(item.name);
-    setDescription(`Equipamento ocupando ${item.gridW}x${item.gridH} quadrados no grid.`);
+    const { gridW, gridH } = getDimensions(item);
+    setDescription(`Equipamento ocupando ${gridW}x${gridH} quadrados no grid.`);
   };
 
   const handleDragStart = (e, item) => {
+    const { gridW, gridH } = getDimensions(item);
     const payload = JSON.stringify({
       baseName: item.name,
       imageUrl: item.url,
-      gridW: item.gridW,
-      gridH: item.gridH
+      gridW,
+      gridH
     });
     e.dataTransfer.setData('text/plain', payload);
   };
@@ -32,13 +49,17 @@ export default function ItemsMenu({ onAddToken }) {
   const handleSpawnItemOnMap = (itemToSpawn) => {
     const item = itemToSpawn || selectedItem;
     if (!item) return;
+
+    const { gridW, gridH } = getDimensions(item);
+    const nameToUse = itemToSpawn ? itemToSpawn.name : (customName || item.name);
+
     onAddToken({
-      baseName: customName || item.name,
-      imageUrl: item.url,
+      baseName: nameToUse,
+      imageUrl: item.url || item.imageUrl,
       x: 3,
       y: 3,
-      gridW: item.gridW,
-      gridH: item.gridH,
+      gridW,
+      gridH,
       hp: 10,
       maxHp: 10
     });
@@ -53,25 +74,28 @@ export default function ItemsMenu({ onAddToken }) {
 
       {/* Grid of Equipment Presets */}
       <div className="panel-grid-list">
-        {equipList.map((eq) => (
-          <div
-            key={eq.filename}
-            className={`asset-thumb-card ${selectedItem?.filename === eq.filename ? 'selected' : ''}`}
-            draggable="true"
-            onDragStart={(e) => handleDragStart(e, eq)}
-            onClick={() => {
-              handleSelectItem(eq);
-              handleSpawnItemOnMap(eq);
-            }}
-            style={{
-              borderColor: selectedItem?.filename === eq.filename ? 'var(--metal-gold)' : 'var(--metal-bronze)'
-            }}
-            title="Arraste para o mapa ou clique para colocar"
-          >
-            <img src={eq.url} alt={eq.name} className="asset-thumb-img" />
-            <div className="asset-thumb-name">{eq.name} ({eq.gridW}x{eq.gridH})</div>
-          </div>
-        ))}
+        {equipList.map((eq) => {
+          const dims = getDimensions(eq);
+          return (
+            <div
+              key={eq.filename}
+              className={`asset-thumb-card ${selectedItem?.filename === eq.filename ? 'selected' : ''}`}
+              draggable="true"
+              onDragStart={(e) => handleDragStart(e, eq)}
+              onClick={() => {
+                handleSelectItem(eq);
+                handleSpawnItemOnMap(eq);
+              }}
+              style={{
+                borderColor: selectedItem?.filename === eq.filename ? 'var(--metal-gold)' : 'var(--metal-bronze)'
+              }}
+              title="Arraste para o mapa ou clique para colocar"
+            >
+              <img src={eq.url} alt={eq.name} className="asset-thumb-img" />
+              <div className="asset-thumb-name">{eq.name} ({dims.gridW}x{dims.gridH})</div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Selected Item Properties & Inspector */}
@@ -90,7 +114,7 @@ export default function ItemsMenu({ onAddToken }) {
 
             <div className="panel-row">
               <label>Dimensões Grid:</label>
-              <div>{selectedItem.gridW} x {selectedItem.gridH} quadrados</div>
+              <div>{getDimensions(selectedItem).gridW} x {getDimensions(selectedItem).gridH} quadrados</div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

@@ -4,17 +4,21 @@ export default function RollToast({ socket }) {
   const [latestRoll, setLatestRoll] = useState(null);
 
   useEffect(() => {
-    const handleRoll = (rollData) => {
-      setLatestRoll(rollData);
-      const timer = setTimeout(() => {
-        setLatestRoll(null);
-      }, 4500);
-      return () => clearTimeout(timer);
+    if (!socket) return;
+    const handleRollHistory = (history) => {
+      if (Array.isArray(history) && history.length > 0) {
+        const last = history[history.length - 1];
+        setLatestRoll(last);
+        const timer = setTimeout(() => {
+          setLatestRoll(null);
+        }, 4500);
+        return () => clearTimeout(timer);
+      }
     };
 
-    socket.on('dice_rolled', handleRoll);
+    socket.on('roll_history_updated', handleRollHistory);
     return () => {
-      socket.off('dice_rolled', handleRoll);
+      socket.off('roll_history_updated', handleRollHistory);
     };
   }, [socket]);
 
@@ -24,13 +28,13 @@ export default function RollToast({ socket }) {
     <div className="roll-toast-container">
       <div className="roll-toast-box">
         <div>
-          <div className="toast-user">{latestRoll.userName}</div>
+          <div className="toast-user">{latestRoll.userName || 'Jogador'}</div>
           <div className="toast-label">
-            {latestRoll.label} ({latestRoll.diceType}{latestRoll.bonus >= 0 ? `+${latestRoll.bonus}` : latestRoll.bonus})
+            {latestRoll.label || 'Rolagem'}: {latestRoll.formula || ''}
           </div>
         </div>
         <div className="toast-total">
-          {latestRoll.finalResult}
+          {latestRoll.resultText || latestRoll.total}
         </div>
       </div>
     </div>

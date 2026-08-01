@@ -173,7 +173,7 @@ export default function App() {
             drawings={drawings}
             selectedTokenId={selectedTokenId}
             onSelectToken={(token) => {
-              setSelectedTokenId(token.id);
+              setSelectedTokenId(token ? (token.id || token) : null);
             }}
             onMoveToken={handleMoveToken}
             onAddToken={handleAddToken}

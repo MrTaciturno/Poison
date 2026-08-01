@@ -1,9 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { exportPoiseFile } from '../../utils/poiseParser.js';
 
-const SHEET_RATIO = 0.707; // Default aspect ratio of A4 sheet (2480 / 3508)
 const CELL_W = 6.70; // Base width percentage for 1x1 grid cell (per user measurement)
-const CELL_H = 4.737; // Base height percentage for 1x1 grid cell (maintains 1:1 square ratio on 1020x1442.7 container)
+const CELL_H = 5.177; // Base height percentage for 1x1 grid cell (maintains 1:1 square ratio on 1020x1320 container)
 
 const gridZones = [
   { id: 'destra', name: 'Destra', x: 5.8, y: 54.5, w: 3 * CELL_W, h: 4 * CELL_H, cols: 3, rows: 4 },
@@ -11,9 +10,9 @@ const gridZones = [
   { id: 'traje', name: 'Traje', x: 41.0, y: 54.5, w: 3 * CELL_W, h: 4 * CELL_H, cols: 3, rows: 4 },
   { id: 'carga_r', name: 'Carga (Direita)', x: 58.8, y: 54.5, w: 3 * CELL_W, h: 4 * CELL_H, cols: 3, rows: 4 },
   { id: 'sinistra', name: 'Sinistra', x: 76.4, y: 54.5, w: 3 * CELL_W, h: 4 * CELL_H, cols: 3, rows: 4 },
-  { id: 'carga_1', name: 'Carga 1', x: 5.8, y: 74.0, w: 5 * CELL_W, h: 4 * CELL_H, cols: 5, rows: 4 },
-  { id: 'carga_2', name: 'Carga 2', x: 35.2, y: 74.0, w: 5 * CELL_W, h: 4 * CELL_H, cols: 5, rows: 4 },
-  { id: 'carga_3', name: 'Carga 3', x: 64.8, y: 74.0, w: 5 * CELL_W, h: 4 * CELL_H, cols: 5, rows: 4 }
+  { id: 'carga_1', name: 'Carga 1', x: 5.8, y: 72.54, w: 5 * CELL_W, h: 4 * CELL_H, cols: 5, rows: 4 },
+  { id: 'carga_2', name: 'Carga 2', x: 35.2, y: 72.54, w: 5 * CELL_W, h: 4 * CELL_H, cols: 5, rows: 4 },
+  { id: 'carga_3', name: 'Carga 3', x: 64.8, y: 72.54, w: 5 * CELL_W, h: 4 * CELL_H, cols: 5, rows: 4 }
 ];
 
 export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateSheet, onClose }) {
@@ -423,11 +422,11 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
             padding: '24px'
           }}
         >
-          {/* Scaled Sizing Outer Box (Matching exact SHEET_RATIO 0.707: 1020px width by 1442.7px height) */}
+          {/* Scaled Sizing Outer Box (Original 1020px x 1320px paper container dimensions - no vertical stretch!) */}
           <div
             style={{
               width: `${1020 * zoom}px`,
-              height: `${1442.7 * zoom}px`,
+              height: `${1320 * zoom}px`,
               margin: '0 auto',
               position: 'relative',
               flexShrink: 0,
@@ -442,7 +441,7 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
               style={{
                 position: 'relative',
                 width: '1020px',
-                height: '1442.7px',
+                height: '1320px',
                 transform: `scale(${zoom})`,
                 transformOrigin: 'top left',
                 transition: 'transform 0.12s ease-out',

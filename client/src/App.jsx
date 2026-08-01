@@ -6,6 +6,7 @@ import TopHeader from './components/VTT/TopHeader.jsx';
 import SidebarPanel from './components/VTT/SidebarPanel.jsx';
 import RollToast from './components/VTT/RollToast.jsx';
 import PoiseSheetViewer from './components/VTT/PoiseSheetViewer.jsx';
+import ItemInspectorModal from './components/VTT/ItemInspectorModal.jsx';
 import { socket } from './utils/socket.js';
 
 class ErrorBoundary extends React.Component {
@@ -65,11 +66,13 @@ export default function App() {
   const [tokens, setTokens] = useState([]);
   const [drawings, setDrawings] = useState([]);
   const [rollHistory, setRollHistory] = useState([]);
+  const [arsenal, setArsenal] = useState([]);
 
   // UI Active Sidebar Tab & Selection
   const [activeTab, setActiveTab] = useState(null);
   const [selectedTokenId, setSelectedTokenId] = useState(null);
   const [isSheetModalOpen, setIsSheetModalOpen] = useState(false);
+  const [inspectingItem, setInspectingItem] = useState(null);
 
   // Active Drawing Tool State (Default: null)
   const [activeDrawingTool, setActiveDrawingTool] = useState(null);
@@ -86,6 +89,7 @@ export default function App() {
         if (Array.isArray(roomState.tokens)) setTokens(roomState.tokens);
         if (Array.isArray(roomState.drawings)) setDrawings(roomState.drawings);
         if (Array.isArray(roomState.rollHistory)) setRollHistory(roomState.rollHistory);
+        if (Array.isArray(roomState.arsenal)) setArsenal(roomState.arsenal);
       }
       setScreen('vtt');
     });
@@ -114,6 +118,10 @@ export default function App() {
       if (Array.isArray(updatedHistory)) setRollHistory(updatedHistory);
     });
 
+    socket.on('arsenal_updated', (updatedArsenal) => {
+      if (Array.isArray(updatedArsenal)) setArsenal(updatedArsenal);
+    });
+
     return () => {
       socket.off('room_joined');
       socket.off('players_updated');
@@ -121,6 +129,7 @@ export default function App() {
       socket.off('tokens_updated');
       socket.off('drawings_updated');
       socket.off('roll_history_updated');
+      socket.off('arsenal_updated');
     };
   }, []);
 
@@ -259,10 +268,12 @@ export default function App() {
               tokens={tokens}
               selectedToken={selectedToken}
               players={players}
+              arsenal={arsenal}
               onAddToken={handleAddToken}
               onUpdateToken={handleUpdateToken}
               onDeleteToken={handleDeleteToken}
               onToggleCoMaster={handleToggleCoMaster}
+              onInspectItem={(item) => setInspectingItem(item)}
               activeDrawingTool={activeDrawingTool}
               onSelectTool={setActiveDrawingTool}
               drawingColor={drawingColor}
@@ -282,6 +293,19 @@ export default function App() {
                 socket={socket}
                 onUpdateSheet={handleUpdateSheet}
                 onClose={() => setIsSheetModalOpen(false)}
+              />
+            )}
+
+            {/* Item Inspector Modal (Viewable by all, editable by Master) */}
+            {inspectingItem && (
+              <ItemInspectorModal
+                item={inspectingItem}
+                currentUser={currentUser}
+                onClose={() => setInspectingItem(null)}
+                onUpdateItem={(updated) => {
+                  socket.emit('update_item_in_arsenal', updated);
+                  setInspectingItem(null);
+                }}
               />
             )}
 

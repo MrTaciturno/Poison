@@ -5,6 +5,7 @@ import TokensMenu from './TokensMenu.jsx';
 import DrawingMenu from './DrawingMenu.jsx';
 import DiceMenu from './DiceMenu.jsx';
 import ItemsMenu from './ItemsMenu.jsx';
+import ForgeMenu from './ForgeMenu.jsx';
 import SettingsMenu from './SettingsMenu.jsx';
 
 export default function SidebarPanel({
@@ -19,10 +20,12 @@ export default function SidebarPanel({
   tokens,
   selectedToken,
   players,
+  arsenal = [],
   onAddToken,
   onUpdateToken,
   onDeleteToken,
   onToggleCoMaster,
+  onInspectItem,
   activeDrawingTool,
   onSelectTool,
   drawingColor,
@@ -35,7 +38,7 @@ export default function SidebarPanel({
 }) {
   if (!activeTab) return null;
 
-  const isMasterOrCoMaster = currentUser?.isMaster || currentUser?.isCoMaster;
+  const isMasterOrCoMaster = Boolean(currentUser?.isMaster || currentUser?.isCoMaster);
 
   const tabTitles = {
     map: 'Menu do Mapa',
@@ -44,6 +47,7 @@ export default function SidebarPanel({
     drawing: 'Ferramentas de Desenho',
     dice: 'Rolagem de Dados',
     items: 'Menu de Equipamentos',
+    forge: 'Forja do Mestre',
     settings: 'Configurações'
   };
 
@@ -101,6 +105,16 @@ export default function SidebarPanel({
 
         {activeTab === 'items' && isMasterOrCoMaster && (
           <ItemsMenu onAddToken={onAddToken} />
+        )}
+
+        {activeTab === 'forge' && isMasterOrCoMaster && (
+          <ForgeMenu
+            arsenal={arsenal}
+            onAddToken={onAddToken}
+            currentUser={currentUser}
+            socket={socket}
+            onInspectItem={onInspectItem}
+          />
         )}
 
         {activeTab === 'settings' && (

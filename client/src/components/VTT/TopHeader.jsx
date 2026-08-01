@@ -123,6 +123,15 @@ export default function TopHeader({
           </button>
         )}
 
+        {isMasterOrCoMaster && (
+          <button
+            className={`menu-nav-btn ${activeTab === 'forge' ? 'active' : ''}`}
+            onClick={() => onSelectTab(activeTab === 'forge' ? null : 'forge')}
+          >
+            Forja
+          </button>
+        )}
+
         <button
           className={`menu-nav-btn ${activeTab === 'settings' ? 'active' : ''}`}
           onClick={() => onSelectTab(activeTab === 'settings' ? null : 'settings')}

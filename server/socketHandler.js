@@ -48,7 +48,8 @@ export function setupSocketHandler(io) {
           players: [],
           tokens: [],
           drawings: [],
-          rollHistory: []
+          rollHistory: [],
+          arsenal: []
         });
       }
 
@@ -356,6 +357,67 @@ export function setupSocketHandler(io) {
       if (room.rollHistory.length > 50) room.rollHistory.shift();
 
       io.to(currentRoom).emit('roll_history_updated', room.rollHistory);
+    });
+
+    // Arsenal / Forge Handlers
+    socket.on('add_item_to_arsenal', (itemData) => {
+      if (!currentRoom || !(currentUser?.isMaster || currentUser?.isCoMaster)) return;
+      const room = rooms.get(currentRoom);
+      if (!room) return;
+
+      if (!room.arsenal) room.arsenal = [];
+      const newItem = {
+        id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        name: itemData.name || 'Novo Item',
+        type: itemData.type || 'Arma',
+        iTam: itemData.iTam || '1x1',
+        val: itemData.val || 0,
+        dur: itemData.dur ?? 10,
+        maxDur: itemData.maxDur ?? 10,
+        preReq: itemData.preReq || '',
+        modI: itemData.modI || '',
+        attacks: Array.isArray(itemData.attacks) ? itemData.attacks : [],
+        alcE: itemData.alcE || '',
+        recarga: itemData.recarga || '',
+        bloq: itemData.bloq || '',
+        description: itemData.description || '',
+        imageUrl: itemData.imageUrl || ''
+      };
+
+      room.arsenal.push(newItem);
+      io.to(currentRoom).emit('arsenal_updated', room.arsenal);
+    });
+
+    socket.on('update_item_in_arsenal', (updatedItem) => {
+      if (!currentRoom || !(currentUser?.isMaster || currentUser?.isCoMaster)) return;
+      const room = rooms.get(currentRoom);
+      if (!room || !room.arsenal) return;
+
+      const idx = room.arsenal.findIndex(i => i.id === updatedItem.id);
+      if (idx !== -1) {
+        room.arsenal[idx] = { ...room.arsenal[idx], ...updatedItem };
+        io.to(currentRoom).emit('arsenal_updated', room.arsenal);
+      }
+    });
+
+    socket.on('delete_item_from_arsenal', (itemId) => {
+      if (!currentRoom || !(currentUser?.isMaster || currentUser?.isCoMaster)) return;
+      const room = rooms.get(currentRoom);
+      if (!room || !room.arsenal) return;
+
+      room.arsenal = room.arsenal.filter(i => i.id !== itemId);
+      io.to(currentRoom).emit('arsenal_updated', room.arsenal);
+    });
+
+    socket.on('import_arsenal', (newArsenalList) => {
+      if (!currentRoom || !(currentUser?.isMaster || currentUser?.isCoMaster)) return;
+      const room = rooms.get(currentRoom);
+      if (!room) return;
+
+      if (Array.isArray(newArsenalList)) {
+        room.arsenal = newArsenalList;
+        io.to(currentRoom).emit('arsenal_updated', room.arsenal);
+      }
     });
 
     // Handle Disconnect

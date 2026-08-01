@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { exportPoiseFile } from '../../utils/poiseParser.js';
 
-const CELL_W = 6.70; // Base width percentage for 1x1 grid cell (per user measurement)
-const CELL_H = 5.177; // Base height percentage for 1x1 grid cell (maintains 1:1 square ratio on 1020x1320 container)
+const CELL_W = 5.933; // Base width percentage for 1x1 grid cell (per user measurement)
+const CELL_H = 4.51; // Base height percentage for 1x1 grid cell (per user measurement)
 
 const gridZones = [
   { id: 'destra', name: 'Destra', x: 5.8, y: 54.5, w: 3 * CELL_W, h: 4 * CELL_H, cols: 3, rows: 4 },

@@ -1,6 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { exportPoiseFile } from '../../utils/poiseParser.js';
 
+const SHEET_RATIO = 0.707; // Default aspect ratio of A4 sheet (2480 / 3508)
+const CELL_W = 9.48; // Base width percentage for 1x1 grid cell
+const CELL_H = 7.32; // Base height percentage for 1x1 grid cell
+
 const gridZones = [
   { id: 'destra', name: 'Destra', x: 5.8, y: 54.5, w: 28.44, h: 29.3, cols: 3, rows: 4 },
   { id: 'carga_l', name: 'Carga (Esquerda)', x: 23.6, y: 54.5, w: 28.44, h: 29.3, cols: 3, rows: 4 },
@@ -103,19 +107,19 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
 
       let updatedItemProps;
       if (foundZone) {
-        const cellW = foundZone.w / foundZone.cols;
-        const cellH = foundZone.h / foundZone.rows;
-        let col = Math.floor((dropX - foundZone.x) / cellW);
-        let row = Math.floor((dropY - foundZone.y) / cellH);
+        const cellW_zone = foundZone.w / foundZone.cols;
+        const cellH_zone = foundZone.h / foundZone.rows;
+        let col = Math.floor((dropX - foundZone.x) / cellW_zone);
+        let row = Math.floor((dropY - foundZone.y) / cellH_zone);
 
         col = Math.max(0, Math.min(foundZone.cols - cols, col));
         row = Math.max(0, Math.min(foundZone.rows - rows, row));
 
         updatedItemProps = {
-          x: parseFloat((foundZone.x + col * cellW).toFixed(2)),
-          y: parseFloat((foundZone.y + row * cellH).toFixed(2)),
-          w: parseFloat((cols * cellW).toFixed(2)),
-          h: parseFloat((rows * cellH).toFixed(2)),
+          x: parseFloat((foundZone.x + col * cellW_zone).toFixed(2)),
+          y: parseFloat((foundZone.y + row * cellH_zone).toFixed(2)),
+          w: parseFloat((cols * cellW_zone).toFixed(2)),
+          h: parseFloat((rows * cellH_zone).toFixed(2)),
           snapped: true,
           zoneId: foundZone.id,
           col,
@@ -125,8 +129,8 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
         updatedItemProps = {
           x: Math.max(2, Math.min(80, dropX)),
           y: Math.max(2, Math.min(80, dropY)),
-          w: parseFloat((cols * 9.48).toFixed(2)),
-          h: parseFloat((rows * 7.32).toFixed(2)),
+          w: parseFloat((cols * CELL_W).toFixed(2)),
+          h: parseFloat((rows * CELL_H).toFixed(2)),
           snapped: false,
           zoneId: null,
           col: 0,
@@ -177,18 +181,18 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
 
     for (const zone of gridZones) {
       if (dropX >= zone.x && dropX <= zone.x + zone.w && dropY >= zone.y && dropY <= zone.y + zone.h) {
-        const cellW = zone.w / zone.cols;
-        const cellH = zone.h / zone.rows;
-        let col = Math.floor((dropX - zone.x) / cellW);
-        let row = Math.floor((dropY - zone.y) / cellH);
+        const cellW_zone = zone.w / zone.cols;
+        const cellH_zone = zone.h / zone.rows;
+        let col = Math.floor((dropX - zone.x) / cellW_zone);
+        let row = Math.floor((dropY - zone.y) / cellH_zone);
         col = Math.max(0, Math.min(zone.cols - 1, col));
         row = Math.max(0, Math.min(zone.rows - 1, row));
 
         setSnapPreview({
-          x: zone.x + col * cellW,
-          y: zone.y + row * cellH,
-          w: cellW,
-          h: cellH
+          x: zone.x + col * cellW_zone,
+          y: zone.y + row * cellH_zone,
+          w: cellW_zone,
+          h: cellH_zone
         });
         return;
       }
@@ -419,11 +423,11 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
             padding: '24px'
           }}
         >
-          {/* Scaled Sizing Outer Box */}
+          {/* Scaled Sizing Outer Box (Matching exact SHEET_RATIO 0.707: 1020px width by 1442.7px height) */}
           <div
             style={{
               width: `${1020 * zoom}px`,
-              height: `${1320 * zoom}px`,
+              height: `${1442.7 * zoom}px`,
               margin: '0 auto',
               position: 'relative',
               flexShrink: 0,
@@ -438,7 +442,7 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
               style={{
                 position: 'relative',
                 width: '1020px',
-                height: '1320px',
+                height: '1442.7px',
                 transform: `scale(${zoom})`,
                 transformOrigin: 'top left',
                 transition: 'transform 0.12s ease-out',

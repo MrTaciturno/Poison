@@ -444,6 +444,42 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                 const width = `${f.w}%`;
                 const height = `${f.h}%`;
                 const fontSize = f.fontSize ? `${f.fontSize * 0.8}px` : '13px';
+                const fieldName = f.name === 'Grupo de EXP' ? 'Pontos de Ação' : f.name || 'Pontos de Ação';
+
+                if (f.type === 'checkbox') {
+                  return (
+                    <div
+                      key={f.id}
+                      style={{
+                        position: 'absolute',
+                        left,
+                        top,
+                        width,
+                        height,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      title={fieldName}
+                    >
+                      <div
+                        onClick={() => handleFieldChange(f.id, !f.value)}
+                        style={{
+                          width: '62px',
+                          height: '62px',
+                          maxWidth: '100%',
+                          maxHeight: '100%',
+                          borderRadius: '50%',
+                          border: '2px solid #4a3425',
+                          backgroundColor: f.value ? '#8b322c' : 'transparent',
+                          cursor: 'pointer',
+                          boxShadow: f.value ? '0 0 8px #8b322c' : 'none',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+                  );
+                }
 
                 if (f.type === 'bubble-group' && Array.isArray(f.value)) {
                   return (
@@ -459,20 +495,23 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                         alignItems: 'center',
                         justifyContent: 'space-around'
                       }}
-                      title={f.name}
+                      title={fieldName}
                     >
                       {f.value.map((checked, bIdx) => (
                         <div
                           key={bIdx}
                           onClick={() => handleBubbleToggle(f.id, bIdx)}
                           style={{
-                            width: '13px',
-                            height: '13px',
+                            width: '62px',
+                            height: '62px',
+                            maxWidth: '100%',
+                            maxHeight: '100%',
                             borderRadius: '50%',
-                            border: '1.5px solid #4a3425',
+                            border: '2px solid #4a3425',
                             backgroundColor: checked ? '#8b322c' : 'transparent',
                             cursor: 'pointer',
-                            boxShadow: checked ? '0 0 4px #8b322c' : 'none'
+                            boxShadow: checked ? '0 0 8px #8b322c' : 'none',
+                            boxSizing: 'border-box'
                           }}
                         />
                       ))}
@@ -514,7 +553,7 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                           wordBreak: 'break-word',
                           boxSizing: 'border-box'
                         }}
-                        title={f.name}
+                        title={fieldName}
                       />
                     </div>
                   );
@@ -549,7 +588,7 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                         padding: '0 2px',
                         borderRadius: '2px'
                       }}
-                      title={f.name}
+                      title={fieldName}
                     />
                   </div>
                 );

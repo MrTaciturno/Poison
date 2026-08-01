@@ -8,6 +8,42 @@ import RollToast from './components/VTT/RollToast.jsx';
 import PoiseSheetViewer from './components/VTT/PoiseSheetViewer.jsx';
 import { socket } from './utils/socket.js';
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("React ErrorBoundary caught an error:", error, errorInfo);
+    this.setState({ errorInfo });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '24px', color: '#ff6b6b', backgroundColor: '#120c09', height: '100vh', overflow: 'auto', fontFamily: 'monospace' }}>
+          <h2 style={{ color: '#ffd166' }}>Erro no VTT Detectado:</h2>
+          <pre style={{ whiteSpace: 'pre-wrap', color: '#ff6b6b', fontSize: '1rem' }}>
+            {this.state.error && this.state.error.toString()}
+          </pre>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.8rem', color: '#a67c52', marginTop: '12px' }}>
+            {this.state.errorInfo && this.state.errorInfo.componentStack}
+          </pre>
+          <button onClick={() => window.location.reload()} style={{ marginTop: '20px', padding: '10px 20px', cursor: 'pointer' }}>
+            Recarregar Página
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [screen, setScreen] = useState('welcome'); // 'welcome' | 'lobby' | 'vtt'
   const [userName, setUserName] = useState('');
@@ -44,34 +80,38 @@ export default function App() {
     socket.on('room_joined', ({ roomId, user, roomState }) => {
       setRoomId(roomId);
       setCurrentUser(user);
-      setMapState(roomState.mapState);
-      setPlayers(roomState.players);
-      setTokens(roomState.tokens);
-      setDrawings(roomState.drawings);
-      setRollHistory(roomState.rollHistory);
+      if (roomState) {
+        if (roomState.mapState) setMapState(roomState.mapState);
+        if (Array.isArray(roomState.players)) setPlayers(roomState.players);
+        if (Array.isArray(roomState.tokens)) setTokens(roomState.tokens);
+        if (Array.isArray(roomState.drawings)) setDrawings(roomState.drawings);
+        if (Array.isArray(roomState.rollHistory)) setRollHistory(roomState.rollHistory);
+      }
       setScreen('vtt');
     });
 
     socket.on('players_updated', (updatedPlayers) => {
-      setPlayers(updatedPlayers);
-      const me = updatedPlayers.find((p) => p.id === socket.id);
-      if (me) setCurrentUser(me);
+      if (Array.isArray(updatedPlayers)) {
+        setPlayers(updatedPlayers);
+        const me = updatedPlayers.find((p) => p.id === socket.id);
+        if (me) setCurrentUser(me);
+      }
     });
 
     socket.on('map_updated', (updatedMap) => {
-      setMapState(updatedMap);
+      if (updatedMap) setMapState(updatedMap);
     });
 
     socket.on('tokens_updated', (updatedTokens) => {
-      setTokens(updatedTokens);
+      if (Array.isArray(updatedTokens)) setTokens(updatedTokens);
     });
 
     socket.on('drawings_updated', (updatedDrawings) => {
-      setDrawings(updatedDrawings);
+      if (Array.isArray(updatedDrawings)) setDrawings(updatedDrawings);
     });
 
     socket.on('roll_history_updated', (updatedHistory) => {
-      setRollHistory(updatedHistory);
+      if (Array.isArray(updatedHistory)) setRollHistory(updatedHistory);
     });
 
     return () => {
@@ -139,8 +179,12 @@ export default function App() {
     socket.emit('clear_drawings');
   };
 
-  const handleRollDice = (rollData) => {
-    socket.emit('roll_dice', rollData);
+  const handleToggleCoMaster = (targetUserId) => {
+    socket.emit('toggle_co_master', { targetUserId });
+  };
+
+  const handleRollDice = (formula, label) => {
+    socket.emit('roll_dice', { formula, label });
   };
 
   const handleSelectTab = (tab) => {
@@ -150,100 +194,102 @@ export default function App() {
     setActiveTab(tab);
   };
 
-  const selectedToken = tokens.find((t) => t.id === selectedTokenId) || null;
+  const selectedToken = tokens.find((t) => t?.id === selectedTokenId) || null;
 
   return (
-    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      {screen === 'welcome' && <WelcomeScreen onStart={handleStartName} />}
+    <ErrorBoundary>
+      <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+        {screen === 'welcome' && <WelcomeScreen onStart={handleStartName} />}
 
-      {screen === 'lobby' && (
-        <LobbyScreen
-          userName={userName}
-          onCreateRoom={handleCreateRoom}
-          onJoinRoom={handleJoinRoom}
-        />
-      )}
-
-      {screen === 'vtt' && currentUser && (
-        <div className="vtt-container">
-          {/* Fullscreen Pixi.js Canvas */}
-          <VTTCanvas
-            mapState={mapState}
-            tokens={tokens}
-            drawings={drawings}
-            selectedTokenId={selectedTokenId}
-            onSelectToken={(token) => {
-              setSelectedTokenId(token ? (token.id || token) : null);
-            }}
-            onMoveToken={handleMoveToken}
-            onAddToken={handleAddToken}
-            onDeleteToken={handleDeleteToken}
-            onAddDrawing={handleAddDrawing}
-            onDeleteDrawing={handleDeleteDrawing}
-            activeDrawingTool={activeDrawingTool}
-            drawingColor={drawingColor}
-            drawingWidth={strokeWidth}
-            currentUser={currentUser}
-            socket={socket}
+        {screen === 'lobby' && (
+          <LobbyScreen
+            userName={userName}
+            onCreateRoom={handleCreateRoom}
+            onJoinRoom={handleJoinRoom}
           />
+        )}
 
-          {/* Top Header Bar */}
-          <TopHeader
-            mapState={mapState}
-            onUpdateMapName={(name) => handleUpdateMap({ name })}
-            players={players}
-            currentUser={currentUser}
-            activeTab={activeTab}
-            onSelectTab={handleSelectTab}
-            onLeaveRoom={handleLeaveRoom}
-          />
+        {screen === 'vtt' && currentUser && (
+          <div className="vtt-container">
+            {/* Fullscreen Pixi.js Canvas */}
+            <VTTCanvas
+              mapState={mapState}
+              tokens={tokens}
+              drawings={drawings}
+              selectedTokenId={selectedTokenId}
+              onSelectToken={(token) => {
+                setSelectedTokenId(token ? (token.id || token) : null);
+              }}
+              onMoveToken={handleMoveToken}
+              onAddToken={handleAddToken}
+              onDeleteToken={handleDeleteToken}
+              onAddDrawing={handleAddDrawing}
+              onDeleteDrawing={handleDeleteDrawing}
+              activeDrawingTool={activeDrawingTool}
+              drawingColor={drawingColor}
+              drawingWidth={strokeWidth}
+              currentUser={currentUser}
+              socket={socket}
+            />
 
-          {/* Right Floating Sidebar Menu */}
-          <SidebarPanel
-            activeTab={activeTab}
-            onClose={() => {
-              setActiveTab(null);
-              setActiveDrawingTool(null);
-            }}
-            mapState={mapState}
-            onUpdateMap={handleUpdateMap}
-            currentUser={currentUser}
-            socket={socket}
-            onUpdateSheet={handleUpdateSheet}
-            onOpenFullSheet={() => setIsSheetModalOpen(true)}
-            tokens={tokens}
-            selectedToken={selectedToken}
-            players={players}
-            onAddToken={handleAddToken}
-            onUpdateToken={handleUpdateToken}
-            onDeleteToken={handleDeleteToken}
-            onToggleCoMaster={handleToggleCoMaster}
-            activeDrawingTool={activeDrawingTool}
-            onSelectTool={setActiveDrawingTool}
-            drawingColor={drawingColor}
-            onChangeColor={setDrawingColor}
-            strokeWidth={strokeWidth}
-            onChangeStrokeWidth={setStrokeWidth}
-            onClearDrawings={handleClearDrawings}
-            onRollDice={handleRollDice}
-            rollHistory={rollHistory}
-          />
+            {/* Top Header Bar */}
+            <TopHeader
+              mapState={mapState}
+              onUpdateMapName={(name) => handleUpdateMap({ name })}
+              players={players}
+              currentUser={currentUser}
+              activeTab={activeTab}
+              onSelectTab={handleSelectTab}
+              onLeaveRoom={handleLeaveRoom}
+            />
 
-          {/* Full Interactive Poise Character Sheet Modal */}
-          {isSheetModalOpen && currentUser.sheetData && (
-            <PoiseSheetViewer
-              sheet={currentUser.sheetData}
+            {/* Right Floating Sidebar Menu */}
+            <SidebarPanel
+              activeTab={activeTab}
+              onClose={() => {
+                setActiveTab(null);
+                setActiveDrawingTool(null);
+              }}
+              mapState={mapState}
+              onUpdateMap={handleUpdateMap}
               currentUser={currentUser}
               socket={socket}
               onUpdateSheet={handleUpdateSheet}
-              onClose={() => setIsSheetModalOpen(false)}
+              onOpenFullSheet={() => setIsSheetModalOpen(true)}
+              tokens={tokens}
+              selectedToken={selectedToken}
+              players={players}
+              onAddToken={handleAddToken}
+              onUpdateToken={handleUpdateToken}
+              onDeleteToken={handleDeleteToken}
+              onToggleCoMaster={handleToggleCoMaster}
+              activeDrawingTool={activeDrawingTool}
+              onSelectTool={setActiveDrawingTool}
+              drawingColor={drawingColor}
+              onChangeColor={setDrawingColor}
+              strokeWidth={strokeWidth}
+              onChangeStrokeWidth={setStrokeWidth}
+              onClearDrawings={handleClearDrawings}
+              onRollDice={handleRollDice}
+              rollHistory={rollHistory}
             />
-          )}
 
-          {/* Discrete Dice Roll Toast Popup */}
-          <RollToast socket={socket} />
-        </div>
-      )}
-    </div>
+            {/* Full Interactive Poise Character Sheet Modal */}
+            {isSheetModalOpen && currentUser.sheetData && (
+              <PoiseSheetViewer
+                sheet={currentUser.sheetData}
+                currentUser={currentUser}
+                socket={socket}
+                onUpdateSheet={handleUpdateSheet}
+                onClose={() => setIsSheetModalOpen(false)}
+              />
+            )}
+
+            {/* Discrete Dice Roll Toast Popup */}
+            <RollToast socket={socket} />
+          </div>
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }

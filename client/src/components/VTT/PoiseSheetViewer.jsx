@@ -480,6 +480,46 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                   );
                 }
 
+                const isTextarea = f.type === 'textarea' || f.id === 'nome_desc' || f.id === 'modificadores';
+
+                if (isTextarea) {
+                  return (
+                    <div
+                      key={f.id}
+                      style={{
+                        position: 'absolute',
+                        left,
+                        top,
+                        width,
+                        height
+                      }}
+                    >
+                      <textarea
+                        value={f.value !== undefined ? f.value : ''}
+                        onChange={(e) => handleFieldChange(f.id, e.target.value)}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          background: 'rgba(255, 255, 255, 0.18)',
+                          border: '1px solid rgba(166, 124, 82, 0.4)',
+                          color: '#1a1410',
+                          fontWeight: 'bold',
+                          fontSize,
+                          textAlign: 'justify',
+                          padding: '4px 6px',
+                          borderRadius: '2px',
+                          resize: 'none',
+                          outline: 'none',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          boxSizing: 'border-box'
+                        }}
+                        title={f.name}
+                      />
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={f.id}

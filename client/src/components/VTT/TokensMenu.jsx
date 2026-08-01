@@ -17,10 +17,24 @@ export default function TokensMenu({
       .catch(() => setPresetTokens([]));
   }, []);
 
+  const getDimensions = (token) => {
+    let gridW = token.gridW || 1;
+    let gridH = token.gridH || 1;
+    const match = (token.name || token.filename || '').match(/(\d+)x(\d+)/i);
+    if (match) {
+      gridW = parseInt(match[1], 10);
+      gridH = parseInt(match[2], 10);
+    }
+    return { gridW, gridH };
+  };
+
   const handleSpawnPreset = (token) => {
+    const { gridW, gridH } = getDimensions(token);
     onAddToken({
       baseName: token.name,
       imageUrl: token.url,
+      gridW,
+      gridH,
       x: 2,
       y: 2,
       hp: 20,
@@ -31,11 +45,12 @@ export default function TokensMenu({
   };
 
   const handleDragStart = (e, token) => {
+    const { gridW, gridH } = getDimensions(token);
     const payload = JSON.stringify({
       baseName: token.name,
       imageUrl: token.url,
-      gridW: 1,
-      gridH: 1
+      gridW,
+      gridH
     });
     e.dataTransfer.setData('text/plain', payload);
   };

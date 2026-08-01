@@ -32,6 +32,22 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
     onUpdateSheet(null);
   };
 
+  // Helper to extract dimensions
+  const getDimensions = (itemObj) => {
+    if (!itemObj) return { gridW: 1, gridH: 1 };
+    let gridW = itemObj.gridW || itemObj.cols || 0;
+    let gridH = itemObj.gridH || itemObj.rows || 0;
+    if (!gridW || !gridH) {
+      const strToTest = `${itemObj.name || ''} ${itemObj.baseName || ''} ${itemObj.imageUrl || ''}`;
+      const match = strToTest.match(/(\d+)x(\d+)/i);
+      if (match) {
+        gridW = gridW || parseInt(match[1], 10);
+        gridH = gridH || parseInt(match[2], 10);
+      }
+    }
+    return { gridW: gridW || 1, gridH: gridH || 1 };
+  };
+
   // Add Item to 3-item Staging Grid from Map or Drag
   const handleAddItemToStaging = (itemObj) => {
     if (stagingInventory.length >= 3) {
@@ -39,13 +55,15 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
       return;
     }
 
+    const { gridW, gridH } = getDimensions(itemObj);
+
     const newItem = {
       id: `equip_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       name: itemObj.baseName || itemObj.name || 'Equipamento',
       label: itemObj.baseName || itemObj.name || 'Equipamento',
-      gridW: itemObj.gridW || 1,
-      gridH: itemObj.gridH || 1,
-      imageUrl: itemObj.imageUrl || `/Equip/${itemObj.name}.png`
+      gridW,
+      gridH,
+      imageUrl: itemObj.imageUrl || itemObj.url || `/Equip/${itemObj.name}.png`
     };
 
     const updatedStaging = [...stagingInventory, newItem].slice(0, 3);
@@ -62,11 +80,12 @@ export default function SheetMenu({ currentUser, socket, onUpdateSheet, onOpenFu
   // Spawn item from 3-item Staging Grid onto VTT Map
   const handlePlaceItemOnMap = (item, index) => {
     if (onAddToken) {
+      const { gridW, gridH } = getDimensions(item);
       onAddToken({
         baseName: item.name || 'Equipamento',
         imageUrl: item.imageUrl,
-        gridW: item.gridW || 1,
-        gridH: item.gridH || 1,
+        gridW,
+        gridH,
         x: 3,
         y: 3
       });

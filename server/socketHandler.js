@@ -100,6 +100,18 @@ export function setupSocketHandler(io) {
       const existingCount = room.tokens.filter(t => t.baseName === baseName).length;
       const tokenName = `${baseName}_${existingCount + 1}`;
 
+      let gridW = tokenData.gridW || tokenData.cols || 0;
+      let gridH = tokenData.gridH || tokenData.rows || 0;
+
+      if (!gridW || !gridH) {
+        const strToTest = `${tokenData.baseName || ''} ${tokenData.imageUrl || ''}`;
+        const match = strToTest.match(/(\d+)x(\d+)/i);
+        if (match) {
+          gridW = gridW || parseInt(match[1], 10);
+          gridH = gridH || parseInt(match[2], 10);
+        }
+      }
+
       const newToken = {
         id: `token_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         baseName,
@@ -107,8 +119,8 @@ export function setupSocketHandler(io) {
         imageUrl: tokenData.imageUrl,
         x: tokenData.x ?? 2,
         y: tokenData.y ?? 2,
-        gridW: tokenData.gridW || 1,
-        gridH: tokenData.gridH || 1,
+        gridW: gridW || 1,
+        gridH: gridH || 1,
         hp: tokenData.hp ?? 20,
         maxHp: tokenData.maxHp ?? 20,
         mp: tokenData.mp ?? 10,

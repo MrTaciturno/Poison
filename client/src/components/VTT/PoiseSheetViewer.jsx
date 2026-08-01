@@ -2,18 +2,18 @@ import React, { useState, useRef } from 'react';
 import { exportPoiseFile } from '../../utils/poiseParser.js';
 
 const SHEET_RATIO = 0.707; // Default aspect ratio of A4 sheet (2480 / 3508)
-const CELL_W = 9.48; // Base width percentage for 1x1 grid cell
-const CELL_H = 7.32; // Base height percentage for 1x1 grid cell
+const CELL_W = 6.70; // Base width percentage for 1x1 grid cell (per user measurement)
+const CELL_H = 4.737; // Base height percentage for 1x1 grid cell (maintains 1:1 square ratio on 1020x1442.7 container)
 
 const gridZones = [
-  { id: 'destra', name: 'Destra', x: 5.8, y: 54.5, w: 28.44, h: 29.3, cols: 3, rows: 4 },
-  { id: 'carga_l', name: 'Carga (Esquerda)', x: 23.6, y: 54.5, w: 28.44, h: 29.3, cols: 3, rows: 4 },
-  { id: 'traje', name: 'Traje', x: 41.0, y: 54.5, w: 28.44, h: 29.3, cols: 3, rows: 4 },
-  { id: 'carga_r', name: 'Carga (Direita)', x: 58.8, y: 54.5, w: 28.44, h: 29.3, cols: 3, rows: 4 },
-  { id: 'sinistra', name: 'Sinistra', x: 76.4, y: 54.5, w: 28.44, h: 29.3, cols: 3, rows: 4 },
-  { id: 'carga_1', name: 'Carga 1', x: 5.8, y: 72.54, w: 47.39, h: 29.3, cols: 5, rows: 4 },
-  { id: 'carga_2', name: 'Carga 2', x: 35.2, y: 72.54, w: 47.39, h: 29.3, cols: 5, rows: 4 },
-  { id: 'carga_3', name: 'Carga 3', x: 64.8, y: 72.54, w: 47.39, h: 29.3, cols: 5, rows: 4 }
+  { id: 'destra', name: 'Destra', x: 5.8, y: 54.5, w: 3 * CELL_W, h: 4 * CELL_H, cols: 3, rows: 4 },
+  { id: 'carga_l', name: 'Carga (Esquerda)', x: 23.6, y: 54.5, w: 3 * CELL_W, h: 4 * CELL_H, cols: 3, rows: 4 },
+  { id: 'traje', name: 'Traje', x: 41.0, y: 54.5, w: 3 * CELL_W, h: 4 * CELL_H, cols: 3, rows: 4 },
+  { id: 'carga_r', name: 'Carga (Direita)', x: 58.8, y: 54.5, w: 3 * CELL_W, h: 4 * CELL_H, cols: 3, rows: 4 },
+  { id: 'sinistra', name: 'Sinistra', x: 76.4, y: 54.5, w: 3 * CELL_W, h: 4 * CELL_H, cols: 3, rows: 4 },
+  { id: 'carga_1', name: 'Carga 1', x: 5.8, y: 74.0, w: 5 * CELL_W, h: 4 * CELL_H, cols: 5, rows: 4 },
+  { id: 'carga_2', name: 'Carga 2', x: 35.2, y: 74.0, w: 5 * CELL_W, h: 4 * CELL_H, cols: 5, rows: 4 },
+  { id: 'carga_3', name: 'Carga 3', x: 64.8, y: 74.0, w: 5 * CELL_W, h: 4 * CELL_H, cols: 5, rows: 4 }
 ];
 
 export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateSheet, onClose }) {
@@ -118,8 +118,8 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
         updatedItemProps = {
           x: parseFloat((foundZone.x + col * cellW_zone).toFixed(2)),
           y: parseFloat((foundZone.y + row * cellH_zone).toFixed(2)),
-          w: parseFloat((cols * cellW_zone).toFixed(2)),
-          h: parseFloat((rows * cellH_zone).toFixed(2)),
+          w: parseFloat((cols * CELL_W).toFixed(2)),
+          h: parseFloat((rows * CELL_H).toFixed(2)),
           snapped: true,
           zoneId: foundZone.id,
           col,
@@ -191,8 +191,8 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
         setSnapPreview({
           x: zone.x + col * cellW_zone,
           y: zone.y + row * cellH_zone,
-          w: cellW_zone,
-          h: cellH_zone
+          w: CELL_W,
+          h: CELL_H
         });
         return;
       }
@@ -645,8 +645,8 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                     position: 'absolute',
                     left: `${item.x}%`,
                     top: `${item.y}%`,
-                    width: `${item.w}%`,
-                    height: `${item.h}%`,
+                    width: `${(item.cols || item.gridW || 1) * CELL_W}%`,
+                    height: `${(item.rows || item.gridH || 1) * CELL_H}%`,
                     backgroundImage: item.imageUrl ? `url(${item.imageUrl})` : 'none',
                     backgroundColor: 'rgba(42, 31, 24, 0.9)',
                     backgroundSize: '100% 100%',

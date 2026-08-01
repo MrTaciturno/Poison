@@ -72,7 +72,7 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
     }
   };
 
-  // Drop item from 3-item Staging Grid onto Sheet Grid Zones
+  // Drop item on Sheet (From Staging Grid OR moving item inside Sheet Inventory)
   const handleDropOnSheet = (e) => {
     e.preventDefault();
     setSnapPreview(null);
@@ -82,6 +82,7 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
     try {
       const payload = JSON.parse(dataStr);
       const itemToPlace = payload.item || payload;
+      const source = payload.source || 'staging';
       const stagingIdx = payload.index;
 
       const rect = sheetRef.current.getBoundingClientRect();
@@ -97,10 +98,10 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
         }
       }
 
-      const cols = itemToPlace.gridW || 1;
-      const rows = itemToPlace.gridH || 1;
+      const cols = itemToPlace.cols || itemToPlace.gridW || 1;
+      const rows = itemToPlace.rows || itemToPlace.gridH || 1;
 
-      let newItem;
+      let updatedItemProps;
       if (foundZone) {
         const cellW = foundZone.w / foundZone.cols;
         const cellH = foundZone.h / foundZone.rows;
@@ -110,34 +111,22 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
         col = Math.max(0, Math.min(foundZone.cols - cols, col));
         row = Math.max(0, Math.min(foundZone.rows - rows, row));
 
-        newItem = {
-          id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-          name: itemToPlace.name,
-          desc: itemToPlace.desc || '',
-          cols,
-          rows,
-          imageUrl: itemToPlace.imageUrl,
-          x: foundZone.x + col * cellW,
-          y: foundZone.y + row * cellH,
-          w: cols * cellW,
-          h: rows * cellH,
+        updatedItemProps = {
+          x: parseFloat((foundZone.x + col * cellW).toFixed(2)),
+          y: parseFloat((foundZone.y + row * cellH).toFixed(2)),
+          w: parseFloat((cols * cellW).toFixed(2)),
+          h: parseFloat((rows * cellH).toFixed(2)),
           snapped: true,
           zoneId: foundZone.id,
           col,
           row
         };
       } else {
-        newItem = {
-          id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-          name: itemToPlace.name,
-          desc: itemToPlace.desc || '',
-          cols,
-          rows,
-          imageUrl: itemToPlace.imageUrl,
+        updatedItemProps = {
           x: Math.max(2, Math.min(80, dropX)),
           y: Math.max(2, Math.min(80, dropY)),
-          w: cols * 5.8,
-          h: rows * 4.6,
+          w: parseFloat((cols * 9.48).toFixed(2)),
+          h: parseFloat((rows * 7.32).toFixed(2)),
           snapped: false,
           zoneId: null,
           col: 0,
@@ -145,12 +134,29 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
         };
       }
 
-      const updatedItems = [...items, newItem];
+      let updatedItems;
+      if (source === 'sheet' && itemToPlace.id) {
+        // Move existing item inside sheet
+        updatedItems = items.map((it) => (it.id === itemToPlace.id ? { ...it, ...updatedItemProps } : it));
+      } else {
+        // Add new item from staging grid
+        const newItem = {
+          id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          name: itemToPlace.name,
+          desc: itemToPlace.desc || '',
+          cols,
+          rows,
+          imageUrl: itemToPlace.imageUrl,
+          ...updatedItemProps
+        };
+        updatedItems = [...items, newItem];
+      }
+
       setItems(updatedItems);
       onUpdateSheet({ ...sheet, fields, items: updatedItems });
 
-      // Remove from staging inventory if it came from staging
-      if (stagingIdx !== undefined && stagingIdx >= 0) {
+      // If came from staging grid, remove from staging inventory
+      if (source === 'staging' && stagingIdx !== undefined && stagingIdx >= 0) {
         const updatedStaging = [...stagingInventory];
         updatedStaging.splice(stagingIdx, 1);
         if (socket) {
@@ -311,7 +317,7 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                   draggable={!!item}
                   onDragStart={(e) => {
                     if (item) {
-                      e.dataTransfer.setData('text/plain', JSON.stringify({ item, index: idx }));
+                      e.dataTransfer.setData('text/plain', JSON.stringify({ item, source: 'staging', index: idx }));
                     }
                   }}
                   style={{
@@ -623,6 +629,10 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
               {items.map((item) => (
                 <div
                   key={item.id}
+                  draggable={true}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', JSON.stringify({ item, source: 'sheet', itemId: item.id }));
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedItemId(item.id);
@@ -639,7 +649,7 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                     border: selectedItemId === item.id ? '2px solid var(--metal-gold-bright)' : '1.5px solid var(--metal-bronze)',
                     borderRadius: '4px',
                     boxShadow: selectedItemId === item.id ? '0 0 12px var(--metal-gold)' : '0 4px 12px rgba(0,0,0,0.6)',
-                    cursor: 'pointer',
+                    cursor: 'grab',
                     zIndex: 20,
                     padding: '2px',
                     boxSizing: 'border-box'
@@ -656,7 +666,8 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                       color: '#1a1410',
                       textAlign: 'center',
                       lineHeight: '1.1',
-                      wordBreak: 'break-word'
+                      wordBreak: 'break-word',
+                      pointerEvents: 'none'
                     }}
                   >
                     {item.name}
@@ -674,7 +685,8 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                         color: '#2a1f18',
                         overflow: 'hidden',
                         lineHeight: '1.1',
-                        textAlign: 'left'
+                        textAlign: 'left',
+                        pointerEvents: 'none'
                       }}
                     >
                       {item.desc}

@@ -1,22 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function TopHeader({
-  mapState,
+  mapState = {},
   onUpdateMapName,
   players = [],
-  currentUser,
+  currentUser = {},
   activeTab,
   onSelectTab,
   onLeaveRoom
 }) {
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [tempName, setTempName] = useState(mapState.name || 'Mapa sem Título');
+  const safeMapState = mapState || {};
+  const safeUser = currentUser || {};
+  const safePlayers = Array.isArray(players) ? players : [];
 
-  const isMasterOrCoMaster = currentUser?.isMaster || currentUser?.isCoMaster;
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState(safeMapState.name || 'Mapa sem Título');
+
+  useEffect(() => {
+    if (safeMapState.name) {
+      setTempName(safeMapState.name);
+    }
+  }, [safeMapState.name]);
+
+  const isMasterOrCoMaster = Boolean(safeUser.isMaster || safeUser.isCoMaster);
 
   const handleSaveName = () => {
     setIsEditingName(false);
-    if (tempName.trim() && isMasterOrCoMaster) {
+    if (tempName.trim() && isMasterOrCoMaster && onUpdateMapName) {
       onUpdateMapName(tempName.trim());
     }
   };
@@ -42,7 +52,7 @@ export default function TopHeader({
             style={{ cursor: isMasterOrCoMaster ? 'pointer' : 'default' }}
             title={isMasterOrCoMaster ? 'Clique para editar o nome do mapa' : ''}
           >
-            {mapState.name || 'Mapa sem Título'}
+            {safeMapState.name || 'Mapa sem Título'}
           </div>
         )}
       </div>
@@ -50,13 +60,16 @@ export default function TopHeader({
       {/* Center: Connected Players */}
       <div className="header-center">
         <div className="header-players">
-          {players.map((p) => (
-            <div key={p.id} className={`player-badge ${p.isMaster ? 'is-master' : p.isCoMaster ? 'is-comaster' : ''}`}>
-              {p.isMaster && <span className="master-icon-text">[Mestre]</span>}
-              {p.isCoMaster && !p.isMaster && <span className="master-icon-text" style={{ color: 'var(--metal-gold-bright)' }}>[Co-Mestre]</span>}
-              <span>{p.name}</span>
-            </div>
-          ))}
+          {safePlayers.map((p) => {
+            if (!p) return null;
+            return (
+              <div key={p.id || Math.random()} className={`player-badge ${p.isMaster ? 'is-master' : p.isCoMaster ? 'is-comaster' : ''}`}>
+                {p.isMaster && <span className="master-icon-text">[Mestre]</span>}
+                {p.isCoMaster && !p.isMaster && <span className="master-icon-text" style={{ color: 'var(--metal-gold-bright)' }}>[Co-Mestre]</span>}
+                <span>{p.name || 'Jogador'}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 

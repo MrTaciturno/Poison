@@ -287,6 +287,7 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
         <div
           style={{
             width: '280px',
+            flexShrink: 0,
             backgroundColor: '#1b130e',
             borderRight: '2px solid var(--metal-bronze)',
             padding: '12px',
@@ -400,27 +401,30 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
           )}
         </div>
 
-        {/* Right Main Canvas Viewport */}
+        {/* Right Main Canvas Viewport (Scrolls in X & Y without hiding behind sidebar or showing unneeded vertical scroll) */}
         <div
           onWheel={handleWheelZoom}
           style={{
             flex: 1,
+            minWidth: 0,
             position: 'relative',
             overflow: 'auto',
             backgroundColor: '#120c09',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'flex-start',
-            padding: '16px'
+            padding: '24px'
           }}
         >
+          {/* Scaled Sizing Outer Box */}
           <div
             style={{
-              transform: `scale(${zoom})`,
-              transformOrigin: 'top center',
-              transition: 'transform 0.12s ease-out'
+              width: `${1020 * zoom}px`,
+              height: `${1320 * zoom}px`,
+              margin: '0 auto',
+              position: 'relative',
+              flexShrink: 0,
+              transition: 'width 0.12s ease-out, height 0.12s ease-out'
             }}
           >
+            {/* Sheet Canvas Container */}
             <div
               ref={sheetRef}
               onDragOver={handleDragOverSheet}
@@ -429,6 +433,9 @@ export default function PoiseSheetViewer({ sheet, currentUser, socket, onUpdateS
                 position: 'relative',
                 width: '1020px',
                 height: '1320px',
+                transform: `scale(${zoom})`,
+                transformOrigin: 'top left',
+                transition: 'transform 0.12s ease-out',
                 backgroundImage: sheet.bgImage ? `url(${sheet.bgImage})` : 'none',
                 backgroundSize: '100% 100%',
                 backgroundRepeat: 'no-repeat',

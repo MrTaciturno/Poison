@@ -8,11 +8,16 @@ export default function DiceMenu({ onRollDice, rollHistory = [] }) {
   const diceTypes = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd%'];
 
   const handleRoll = (diceType) => {
+    const count = parseInt(numDice, 10) || 1;
+    const b = parseInt(bonus, 10) || 0;
+    const formulaStr = `${count}${diceType}${b !== 0 ? (b > 0 ? `+${b}` : `${b}`) : ''}`;
+
     onRollDice({
+      formula: formulaStr,
+      label: label.trim() || 'Rolagem de Dados',
       diceType,
-      numDice: parseInt(numDice, 10) || 1,
-      bonus: parseInt(bonus, 10) || 0,
-      label: label.trim() || 'Rolagem de Dados'
+      numDice: count,
+      bonus: b
     });
   };
 
@@ -70,20 +75,32 @@ export default function DiceMenu({ onRollDice, rollHistory = [] }) {
         {rollHistory.length === 0 ? (
           <p style={{ fontSize: '0.8rem', color: 'var(--parchment-muted)' }}>Nenhuma rolagem realizada nesta sessão.</p>
         ) : (
-          rollHistory.map((item) => (
-            <div key={item.id} className="roll-feed-item">
-              <div className="roll-feed-header">
-                <strong>{item.userName}</strong>
-                <span>{item.timestamp}</span>
+          rollHistory.map((item) => {
+            if (!item) return null;
+
+            // Safe text extraction
+            const userName = typeof item.userName === 'string' ? item.userName : 'Jogador';
+            const timestamp = typeof item.timestamp === 'string' ? item.timestamp : '';
+            const rollLabel = typeof item.label === 'string' ? item.label : 'Rolagem';
+            const formulaDisplay = typeof item.formula === 'string' ? item.formula : (item.diceType ? `${item.numDice || 1}${item.diceType}` : '');
+            const resultText = typeof item.resultText === 'string' ? item.resultText : String(item.total ?? 0);
+            const rollsDisplay = Array.isArray(item.rolls) ? item.rolls.join(', ') : '';
+
+            return (
+              <div key={item.id || Math.random()} className="roll-feed-item">
+                <div className="roll-feed-header">
+                  <strong>{userName}</strong>
+                  <span>{timestamp}</span>
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--sand-pastel)' }}>
+                  {rollLabel} {formulaDisplay ? `(${formulaDisplay})` : ''}
+                </div>
+                <div className="roll-feed-result">
+                  {resultText} {rollsDisplay && !resultText.includes('[') ? <span style={{ fontSize: '0.75rem', color: 'var(--parchment-muted)' }}>[{rollsDisplay}]</span> : null}
+                </div>
               </div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--sand-pastel)' }}>
-                {item.label} ({item.diceType}{item.bonus >= 0 ? `+${item.bonus}` : item.bonus})
-              </div>
-              <div className="roll-feed-result">
-                Resultado: {item.finalResult} <span style={{ fontSize: '0.75rem', color: 'var(--parchment-muted)' }}>[{item.rolls.join(', ')}]</span>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

@@ -311,48 +311,72 @@ export function setupSocketHandler(io) {
       io.to(currentRoom).emit('players_updated', room.players);
     });
 
-    // Roll Dice Event
-    socket.on('roll_dice', ({ formula, label }) => {
+    // Roll Dice Event (Accepts string formula or object payload)
+    socket.on('roll_dice', (payload) => {
       if (!currentRoom || !currentUser) return;
       const room = rooms.get(currentRoom);
       if (!room) return;
 
+      let formula = typeof payload === 'string' ? payload : (payload?.formula || '');
+      let label = (typeof payload === 'object' && payload?.label) ? payload.label : 'Rolagem';
+      let diceType = typeof payload === 'object' ? payload?.diceType || '' : '';
+      let numDice = typeof payload === 'object' ? payload?.numDice || 1 : 1;
+      let bonus = typeof payload === 'object' ? payload?.bonus || 0 : 0;
+
+      if (!formula && diceType) {
+        formula = `${numDice}${diceType}${bonus ? (bonus > 0 ? `+${bonus}` : `${bonus}`) : ''}`;
+      }
+      if (!formula) formula = '1d20';
+
       let resultText = '';
       let total = 0;
+      let rolls = [];
 
       try {
-        const match = formula.match(/^(\d+)d(\d+)([+-]\d+)?$/i);
-        if (match) {
-          const count = parseInt(match[1], 10);
-          const sides = parseInt(match[2], 10);
-          const mod = match[3] ? parseInt(match[3], 10) : 0;
-
-          const rolls = [];
-          for (let i = 0; i < count; i++) {
-            rolls.push(Math.floor(Math.random() * sides) + 1);
-          }
-          const sum = rolls.reduce((a, b) => a + b, 0);
-          total = sum + mod;
-          resultText = `[${rolls.join(', ')}]${mod ? (mod > 0 ? ` + ${mod}` : ` ${mod}`) : ''} = ${total}`;
+        if (diceType === 'd%' || formula === 'd%') {
+          total = Math.floor(Math.random() * 100) + 1;
+          rolls = [total];
+          resultText = `d%: ${total}`;
         } else {
-          total = Math.floor(Math.random() * 20) + 1;
-          resultText = `Resultado d20: ${total}`;
+          const match = String(formula).match(/^(\d+)?d(\d+)([+-]\d+)?$/i);
+          if (match) {
+            const count = match[1] ? parseInt(match[1], 10) : 1;
+            const sides = parseInt(match[2], 10);
+            const mod = match[3] ? parseInt(match[3], 10) : 0;
+
+            for (let i = 0; i < count; i++) {
+              rolls.push(Math.floor(Math.random() * sides) + 1);
+            }
+            const sum = rolls.reduce((a, b) => a + b, 0);
+            total = sum + mod;
+            resultText = `[${rolls.join(', ')}]${mod ? (mod > 0 ? ` + ${mod}` : ` ${mod}`) : ''} = ${total}`;
+          } else {
+            total = Math.floor(Math.random() * 20) + 1;
+            rolls = [total];
+            resultText = `Resultado: ${total}`;
+          }
         }
       } catch (err) {
         total = 0;
-        resultText = 'Erro na fórmula de dados';
+        rolls = [0];
+        resultText = 'Erro na rolagem de dados';
       }
 
       const rollEntry = {
-        id: `roll_${Date.now()}`,
-        userName: currentUser.name,
-        formula,
-        label: label || 'Rolagem',
-        resultText,
-        total,
+        id: `roll_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        userName: currentUser.name || 'Jogador',
+        formula: String(formula),
+        label: String(label),
+        resultText: String(resultText),
+        total: Number(total),
+        rolls: Array.isArray(rolls) ? rolls : [],
+        diceType: String(diceType),
+        numDice: Number(numDice),
+        bonus: Number(bonus),
         timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
       };
 
+      if (!room.rollHistory) room.rollHistory = [];
       room.rollHistory.push(rollEntry);
       if (room.rollHistory.length > 50) room.rollHistory.shift();
 
